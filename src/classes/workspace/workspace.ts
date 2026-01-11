@@ -46,13 +46,13 @@ export class Workspace {
                 bufs,
                 0,
                 128,
-                carrier,
+                this.sample_view.subarray(start, start+128),
             );
 
-            this.sample_view.set(
-                carrier,
-                start
-            )
+            // this.sample_view.set(
+            //     carrier,
+            //     start
+            // )
             this.current_sample += 128;
 
         };
