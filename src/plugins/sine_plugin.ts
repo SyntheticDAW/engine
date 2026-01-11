@@ -4,28 +4,28 @@ export class SinePlugin implements AudioOutputPlugin {
     wantsMic: boolean;
     pluginName: string;
     type: AOPluginType;
-    phase: number;
+    freq: number;
+    amp: number;
+
     constructor() {
         this.wantsMic = false;
         this.pluginName = "example sine #01";
         this.type = AOPluginType.JS;
-        this.phase = 0;
+        this.freq = 430; // 430 Hz
+        this.amp = 0.25; // volume
     }
-    process128(arr: Float32Array): void {
-        const sampleRate = 44100;       // adjust if your AudioContext uses a different rate
-        const freq = 430;                // 430 Hz
-        const amp = 0.25;                // volume
-        // Keep track of a phase offset so the sine wave is continuous
-        if (this.phase === undefined) this.phase = 0;
 
-        const phaseIncrement = (2 * Math.PI * freq) / sampleRate;
+    /**
+     * Fill arr with 128 samples starting at the given absolute sample index
+     */
+    process128(arr: Float32Array, startSample: number): void {
+        const sampleRate = 44100;
+        const phaseIncrement = (2 * Math.PI * this.freq) / sampleRate;
 
         for (let i = 0; i < arr.length; i++) {
-            arr[i] = Math.sin(this.phase) * amp;
-            this.phase += phaseIncrement;
-            // Wrap phase to prevent it from growing indefinitely
-            if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
+            // calculate absolute phase from global sample index
+            const phase = (startSample + i) * phaseIncrement;
+            arr[i] = Math.sin(phase) * this.amp;
         }
     }
-
 }

@@ -19,7 +19,7 @@
   const pr = {
     get128Samples: function(start) {
       const arr = new Float32Array(blockSize);
-      tp.process128(arr);
+      tp.process128(arr, startSample);
       return arr;
     }
   };

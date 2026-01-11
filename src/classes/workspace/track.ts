@@ -14,4 +14,8 @@ export class Track {
     }
 
     
+    process128(startSample: number) {
+        return this.plugin.process128(this.buffer, startSample);
+    }
+    
 }

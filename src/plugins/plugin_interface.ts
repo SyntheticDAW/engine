@@ -4,7 +4,7 @@ export enum AOPluginType {
 }
 
 export interface AudioOutputPlugin {
-    process128(arr: Float32Array<SharedArrayBuffer|ArrayBuffer>): void;
+    process128(arr: Float32Array<SharedArrayBuffer|ArrayBuffer>, startSample: number): void;
     micSAB?: Float32Array<SharedArrayBuffer>;
     wantsMic: boolean;
     pluginName: string;
