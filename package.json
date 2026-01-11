@@ -1,0 +1,15 @@
+{
+  "name": "synth-ts",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "node ./scripts/build.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "A typescript synthesizer.",
+  "devDependencies": {
+    "esbuild": "^0.27.2"
+  }
+}
