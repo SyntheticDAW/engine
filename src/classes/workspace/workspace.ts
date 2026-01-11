@@ -40,12 +40,17 @@ export class Workspace {
 
             const start = b2f * 128;
 
-            sumBlocksMutate(
-                bufs,
-                start,
-                128,
-                this.sample_view.subarray(start, start + 128)
-            );
+            // sumBlocksMutate(
+            //     bufs,
+            //     start,
+            //     128,
+            //     this.sample_view.subarray(start, start + 128)
+            // );
+
+            this.sample_view.set(
+                bufs[0],
+                start
+            )
             this.current_sample += 128;
 
         };
