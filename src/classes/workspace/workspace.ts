@@ -26,7 +26,6 @@ export class Workspace {
     async init() {
         await this.mainWorklet.init();
         this.mainWorklet.onRequest = (blockIndex) => {
-            console.log('summing')
             // console.log('blockIndex', blockIndex)
             const b2f = blockIndex % this.queue_length;
             // const b2f = blockIndex % this.queue_length;
