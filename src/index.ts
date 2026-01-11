@@ -3,6 +3,7 @@ export { Track } from "./classes/workspace/track";
 export { Workspace } from "./classes/workspace/workspace";
 export { sumBlocksMutate } from "./mutations/sum_mutate";
 import { UseList_Heap } from "./performance/allocators/free_list";
+import { Plugin2H } from "./plugins/2h_plugin";
 import { SinePlugin } from "./plugins/sine_plugin";
 
 export { createSampleSAB, createSampleView, createWorkletBlob, WorkletHelper } from "./processor/create_processor";
@@ -21,6 +22,7 @@ export { sampleToSeconds } from "./util/seconds_from_sample";
 
 export const ExamplePlugins = {
     Sine: SinePlugin,
+    Plugin2H
 }
 
 
