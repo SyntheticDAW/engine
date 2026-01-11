@@ -19,6 +19,7 @@ export class SinePlugin implements AudioOutputPlugin {
      * Fill arr with 128 samples starting at the given absolute sample index
      */
     process128(arr: Float32Array, startSample: number): void {
+        console.log('is processing 128')
         const sampleRate = 44100;
         const phaseIncrement = (2 * Math.PI * this.freq) / sampleRate;
 

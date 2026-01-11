@@ -26,20 +26,49 @@ export class Workspace {
     async init() {
         await this.mainWorklet.init();
         this.mainWorklet.onRequest = (blockIndex) => {
-            const b2f = blockIndex % this.queue_length;
-            
+            // const b2f = blockIndex % this.queue_length;
+            const srcStart = blockIndex * 128;  
+
             const bufs = [];
             for (let i = 0; i < this.tracks.length; i++) {
-                if (this.tracks[i].active) bufs.push(this.tracks[i].buffer)
+                this.tracks[i].plugin.process128(this.tracks[i].buffer, srcStart)
+                if (this.tracks[i].active) bufs.push(this.tracks[i].buffer);
             }
 
-            const start = blockIndex * 128
-            sumBlocksMutate(bufs, start, 128, this.sample_view.subarray(start, start + 128))
-        }
+
+            const dstStart = blockIndex * 128;         
+
+            sumBlocksMutate(
+                bufs,
+                srcStart,
+                128,
+                this.sample_view.subarray(dstStart, dstStart + 128)
+            );
+            
+        };
+    }
+
+    async start() {
+        await this.mainWorklet.connect();
+        await this.mainWorklet.start();
+        await this.mainWorklet.unpause()
+
+    }
+
+    pause() {
+        this.mainWorklet.pause()
+    }
+
+    unpause() {
+        this.mainWorklet.unpause()
     }
 
     setLatency(latency: 1 | 2 | 3) {
         this.queue_length = latency + 1 as 2 | 3 | 4;
+    }
+
+    addTrack(t: Track) {
+        this.tracks.push(t)
     }
 
     scrub(sample: number) {

@@ -19,6 +19,10 @@ class SABWaveProcessor extends AudioWorkletProcessor {
         if (this.sampleBuffer) this.sampleBuffer.fill(0);
       } else if (data.type === 'unpause') {
         this.paused = false;
+        if (this.sampleBuffer && this.onRequest) {
+          const firstBlock = Math.floor(this.globalSampleIndex / this.blockSize);
+          this.onRequest(firstBlock);
+        }
       } else if (data.type === 'scrub' && typeof data.sampleIndex === 'number') {
         this.globalSampleIndex = data.sampleIndex;
         this.readIndex = Math.floor(this.globalSampleIndex / this.blockSize);
@@ -30,6 +34,7 @@ class SABWaveProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs, outputs) {
+    console.log('processing')
     const output = outputs[0];
     if (!output || !output[0]) return true;
     const channel = output[0];
@@ -38,6 +43,7 @@ class SABWaveProcessor extends AudioWorkletProcessor {
       channel.fill(0);
       return true;
     }
+    console.log('made it past this.paused || !this.sampleBuffer')
 
     const blockOffset = (this.readIndex % this.queueLength) * this.blockSize;
     for (let i = 0; i < this.blockSize; i++) {
@@ -87,7 +93,7 @@ export class WorkletHelper {
   sampleCounter: Uint32Array;
   queueLength: number;
   blockSize: number = 128;
-  onRequest: RequestCallback = () => {};
+  onRequest: RequestCallback = () => { };
 
   constructor(queueLength: number = 4, existingAudioCtx?: AudioContext) {
     this.queueLength = queueLength;
@@ -106,6 +112,9 @@ export class WorkletHelper {
     this.node = new AudioWorkletNode(this.audioCtx, 'SABWaveProcessor', {
       processorOptions: { queueLength: this.queueLength },
     });
+    this.node.onprocessorerror = (err: any) => {
+      console.error('Error in worklet processor:', err);
+    };
 
     // Send counter SAB to processor
     this.node.port.postMessage({ type: 'sampleCounter', buffer: this.sampleCounter.buffer });

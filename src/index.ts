@@ -1,6 +1,7 @@
 export { struct } from "./performance/allocators/structs";
 export { Track } from "./classes/workspace/track";
 export { Workspace } from "./classes/workspace/workspace";
+export { sumBlocksMutate } from "./mutations/sum_mutate";
 import { UseList_Heap } from "./performance/allocators/free_list";
 import { SinePlugin } from "./plugins/sine_plugin";
 
@@ -26,3 +27,4 @@ export const ExamplePlugins = {
 export const Allocators = {
     UseList_Heap,
 }
+
