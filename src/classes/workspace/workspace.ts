@@ -26,7 +26,8 @@ export class Workspace {
     async init() {
         await this.mainWorklet.init();
         this.mainWorklet.onRequest = (blockIndex) => {
-            console.log('blockIndex', blockIndex)
+            console.log('summing')
+            // console.log('blockIndex', blockIndex)
             const b2f = blockIndex % this.queue_length;
             // const b2f = blockIndex % this.queue_length;
             // const srcStart = blockIndex * 128;
@@ -37,7 +38,7 @@ export class Workspace {
                 if (this.tracks[i].active) bufs.push(this.tracks[i].buffer);
             }
 
-            let carrier = new Float32Array(128);
+            // let carrier = new Float32Array(128);
 
 
             const start = b2f * 128;
