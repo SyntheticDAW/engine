@@ -1,4 +1,6 @@
+import { sumBlocksMutate } from "../../mutations/sum_mutate";
 import { createSampleSAB, createSampleView, WorkletHelper } from "../../processor/create_processor";
+import { Track } from "./track";
 
 export class Workspace {
     mainWorklet: WorkletHelper;
@@ -7,6 +9,7 @@ export class Workspace {
     counter_sab: SharedArrayBuffer;
     sample_view: Float32Array;
     current_sample: number;
+    tracks: Track[];
 
     constructor(latency: 1 | 2 | 3) {
         this.queue_length = latency + 1 as 2 | 3 | 4;
@@ -17,10 +20,22 @@ export class Workspace {
 
         this.mainWorklet.setSAB(this.sample_sab);
         this.current_sample = 0;
+        this.tracks = [];
     }
 
-    async initMain() {
+    async init() {
         await this.mainWorklet.init();
+        this.mainWorklet.onRequest = (blockIndex) => {
+            const b2f = blockIndex % this.queue_length;
+            
+            const bufs = [];
+            for (let i = 0; i < this.tracks.length; i++) {
+                if (this.tracks[i].active) bufs.push(this.tracks[i].buffer)
+            }
+
+            const start = blockIndex * 128
+            sumBlocksMutate(bufs, start, 128, this.sample_view.subarray(start, start + 128))
+        }
     }
 
     setLatency(latency: 1 | 2 | 3) {
