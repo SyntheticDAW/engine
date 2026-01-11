@@ -18,7 +18,7 @@ export class Workspace {
         this.sample_view = createSampleView(this.sample_sab);
         this.counter_sab = new SharedArrayBuffer(4);
 
-        this.mainWorklet.setSAB(this.sample_sab);
+
         this.current_sample = 0;
         this.tracks = [];
     }
@@ -26,26 +26,30 @@ export class Workspace {
     async init() {
         await this.mainWorklet.init();
         this.mainWorklet.onRequest = (blockIndex) => {
+            console.log('blockIndex', blockIndex)
             // const b2f = blockIndex % this.queue_length;
-            const srcStart = blockIndex * 128;  
+            // const srcStart = blockIndex * 128;
 
             const bufs = [];
             for (let i = 0; i < this.tracks.length; i++) {
-                this.tracks[i].plugin.process128(this.tracks[i].buffer, srcStart)
+                this.tracks[i].plugin.process128(this.tracks[i].buffer, this.mainWorklet.sampleCounter[0])
                 if (this.tracks[i].active) bufs.push(this.tracks[i].buffer);
             }
 
 
-            const dstStart = blockIndex * 128;         
+            const dstStart = blockIndex * 128;
 
             sumBlocksMutate(
                 bufs,
-                srcStart,
+                this.current_sample % 128,
                 128,
                 this.sample_view.subarray(dstStart, dstStart + 128)
             );
-            
+            this.current_sample += 128;
+
         };
+        this.mainWorklet.setSAB(this.sample_sab);
+
     }
 
     async start() {

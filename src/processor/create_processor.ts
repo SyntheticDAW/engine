@@ -34,7 +34,6 @@ class SABWaveProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs, outputs) {
-    console.log('processing')
     const output = outputs[0];
     if (!output || !output[0]) return true;
     const channel = output[0];
@@ -43,7 +42,13 @@ class SABWaveProcessor extends AudioWorkletProcessor {
       channel.fill(0);
       return true;
     }
-    console.log('made it past this.paused || !this.sampleBuffer')
+
+    this.readIndex++;
+    this.globalSampleIndex += this.blockSize;
+
+    if (this.counterView) {
+      this.counterView[0] = this.globalSampleIndex;
+    }
 
     const blockOffset = (this.readIndex % this.queueLength) * this.blockSize;
     for (let i = 0; i < this.blockSize; i++) {
@@ -52,12 +57,6 @@ class SABWaveProcessor extends AudioWorkletProcessor {
 
     this.port.postMessage({ type: 'requestBuffer', blockIndex: this.readIndex });
 
-    this.readIndex++;
-    this.globalSampleIndex += this.blockSize;
-
-    if (this.counterView) {
-      this.counterView[0] = this.globalSampleIndex;
-    }
 
     return true;
   }
@@ -122,7 +121,7 @@ export class WorkletHelper {
     // Handle block requests
     this.node.port.onmessage = (event) => {
       if (event.data.type === 'requestBuffer') {
-        const blockIndex = event.data.blockIndex % this.queueLength;
+        const blockIndex = event.data.blockIndex;
         this.onRequest(blockIndex);
       }
     };
@@ -130,7 +129,7 @@ export class WorkletHelper {
 
   setSAB(sab: SharedArrayBuffer) {
     this.sampleBuffer = new Float32Array(sab);
-    this.node?.port.postMessage({ type: 'waveBuffer', buffer: sab });
+    this.node.port.postMessage({ type: 'waveBuffer', buffer: sab });
   }
 
   pause() {
