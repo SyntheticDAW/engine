@@ -37,18 +37,20 @@ export class Workspace {
                 if (this.tracks[i].active) bufs.push(this.tracks[i].buffer);
             }
 
+            let carrier = new Float32Array(128);
+
 
             const start = b2f * 128;
 
-            // sumBlocksMutate(
-            //     bufs,
-            //     start,
-            //     128,
-            //     this.sample_view.subarray(start, start + 128)
-            // );
+            sumBlocksMutate(
+                bufs,
+                0,
+                128,
+                carrier,
+            );
 
             this.sample_view.set(
-                bufs[0],
+                carrier,
                 start
             )
             this.current_sample += 128;
