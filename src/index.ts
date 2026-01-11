@@ -1,4 +1,6 @@
 export { struct } from "./performance/allocators/structs";
+export { Track } from "./classes/workspace/track";
+export { Workspace } from "./classes/workspace/workspace";
 import { UseList_Heap } from "./performance/allocators/free_list";
 import { SinePlugin } from "./plugins/sine_plugin";
 
