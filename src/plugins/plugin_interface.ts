@@ -1,11 +1,12 @@
-export enum PluginType {
+export enum AOPluginType {
     JS,
     WASM,
 }
 
-export interface Plugin {
+export interface AudioOutputPlugin {
     process128(arr: Float32Array<SharedArrayBuffer|ArrayBuffer>): void;
-    
-    plugin_name: string;
-    type: PluginType;
+    micSAB?: Float32Array<SharedArrayBuffer>;
+    wantsMic: boolean;
+    pluginName: string;
+    type: AOPluginType;
 }
