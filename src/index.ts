@@ -1,5 +1,5 @@
 export { struct } from "./performance/allocators/structs";
-import { FreeList_Heap } from "./performance/allocators/free_list";
+import { UseList_Heap } from "./performance/allocators/free_list";
 import { SinePlugin } from "./plugins/sine_plugin";
 
 export { createSampleSAB, createSampleView, createWorkletBlob, WorkletHelper } from "./processor/create_processor";
@@ -22,5 +22,5 @@ export const ExamplePlugins = {
 
 
 export const Allocators = {
-    FreeList_Heap,
+    UseList_Heap,
 }

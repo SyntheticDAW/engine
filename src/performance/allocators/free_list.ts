@@ -1,6 +1,6 @@
 import { StructDefinition } from "./structs";
 
-export class FreeList_Heap {
+export class UseList_Heap {
     arrayBuffer: ArrayBuffer;
     view: Uint8Array;
     allocTable: Record<number, number>;
