@@ -1,3 +1,5 @@
+export { struct } from "./performance/allocators/structs";
+import { FreeList_Heap } from "./performance/allocators/free_list";
 import { SinePlugin } from "./plugins/sine_plugin";
 
 export { createSampleSAB, createSampleView, createWorkletBlob, WorkletHelper } from "./processor/create_processor";
@@ -16,4 +18,9 @@ export { sampleToSeconds } from "./util/seconds_from_sample";
 
 export const ExamplePlugins = {
     Sine: SinePlugin,
+}
+
+
+export const Allocators = {
+    FreeList_Heap,
 }
