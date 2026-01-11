@@ -27,23 +27,24 @@ export class Workspace {
         await this.mainWorklet.init();
         this.mainWorklet.onRequest = (blockIndex) => {
             console.log('blockIndex', blockIndex)
+            const b2f = blockIndex % this.queue_length;
             // const b2f = blockIndex % this.queue_length;
             // const srcStart = blockIndex * 128;
 
             const bufs = [];
             for (let i = 0; i < this.tracks.length; i++) {
-                this.tracks[i].plugin.process128(this.tracks[i].buffer, this.mainWorklet.sampleCounter[0])
+                this.tracks[i].plugin.process128(this.tracks[i].buffer, this.current_sample)
                 if (this.tracks[i].active) bufs.push(this.tracks[i].buffer);
             }
 
 
-            const dstStart = blockIndex * 128;
+            const start = b2f * 128;
 
             sumBlocksMutate(
                 bufs,
-                this.current_sample % 128,
+                start,
                 128,
-                this.sample_view.subarray(dstStart, dstStart + 128)
+                this.sample_view.subarray(start, start + 128)
             );
             this.current_sample += 128;
 
