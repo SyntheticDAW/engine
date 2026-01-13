@@ -2,6 +2,7 @@ export { struct } from "./performance/allocators/structs";
 export { Track } from "./classes/workspace/track";
 export { Workspace } from "./classes/workspace/workspace";
 export { sumBlocksMutate } from "./mutations/sum_mutate";
+export { WasmSummer } from "./mutations/wasm_summer";
 import { UseList_Heap } from "./performance/allocators/free_list";
 import { Plugin2H } from "./plugins/2h_plugin";
 import { SinePlugin } from "./plugins/sine_plugin";
@@ -29,4 +30,5 @@ export const ExamplePlugins = {
 export const Allocators = {
     UseList_Heap,
 }
+
 
