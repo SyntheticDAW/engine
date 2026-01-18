@@ -1,3 +1,4 @@
+import { EffectPlugin } from "../effects/effect_interface";
 import { AOPluginType, AudioOutputPlugin } from "./plugin_interface";
 
 export class SinePlugin implements AudioOutputPlugin {
@@ -11,7 +12,7 @@ export class SinePlugin implements AudioOutputPlugin {
         this.wantsMic = false;
         this.pluginName = "example sine #01";
         this.type = AOPluginType.JS;
-        this.freq = 440; // 430 Hz
+        this.freq = 440; // 430 Hz (wut)
         this.amp = 0.25; // volume
     }
 
@@ -28,5 +29,20 @@ export class SinePlugin implements AudioOutputPlugin {
             const phase = (startSample + i) * phaseIncrement;
             arr[i] = Math.sin(phase) * this.amp;
         }
+    }
+    addEffect(e: EffectPlugin): void {
+        
+    }
+
+    removeEffect(e: EffectPlugin): void {
+        
+    }
+
+    enableEffect(e: EffectPlugin): void {
+        
+    }
+
+    disableEffect(e: EffectPlugin): void {
+        
     }
 }
