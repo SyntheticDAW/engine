@@ -6,6 +6,7 @@ export { WasmSummer } from "./mutations/wasm_summer";
 import { UseList_Heap } from "./performance/allocators/free_list";
 import { Plugin2H } from "./plugins/2h_plugin";
 import { SinePlugin } from "./plugins/sine_plugin";
+export { allocf, hann_ready, loadHann } from "./wasm/hann_api";
 
 export { createSampleSAB, createSampleView, createWorkletBlob, WorkletHelper } from "./processor/create_processor";
 
@@ -30,5 +31,6 @@ export const ExamplePlugins = {
 export const Allocators = {
     UseList_Heap,
 }
+
 
 
