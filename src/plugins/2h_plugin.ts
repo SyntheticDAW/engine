@@ -9,7 +9,8 @@ export class Plugin2H implements AudioOutputPlugin {
     pluginName: string;
     type: AOPluginType;
     effects: EffectPlugin[];
-
+    parameters: Record<string, any>;
+    
     //user defined
     object_allocator: UseList_Heap;
     objects: Record<string, Uint8Array & { ptr: number }>;
@@ -20,7 +21,8 @@ export class Plugin2H implements AudioOutputPlugin {
         this.type = AOPluginType.JS;
         this.effects = [];
         this.object_allocator = new UseList_Heap(1024 * 1024 * 12); //12 mb mem
-        this.objects = {}
+        this.objects = {};
+        this.parameters = {};
     }
 
     createObject(name: string, bytes: number): Uint8Array & { ptr: number } {
@@ -68,14 +70,22 @@ export class Plugin2H implements AudioOutputPlugin {
         this.effects.push(e);
     }
     removeEffect(e: EffectPlugin): void {
-
+        this.effects = this.effects.filter(ef => ef.instance != e.instance)
     }
 
     enableEffect(e: EffectPlugin): void {
-
+        const te = this.effects.find(ef => ef.instance == e.instance);
+        if (!te) throw new Error("effect not found");
+        te.active = true;
     }
 
     disableEffect(e: EffectPlugin): void {
+        const te = this.effects.find(ef => ef.instance == e.instance);
+        if (!te) throw new Error("effect not found");
+        te.active = false;
+    }
 
+    setParameter(p: string, v: any): void {
+        this.parameters[p] = v;
     }
 }

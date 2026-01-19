@@ -1,6 +1,6 @@
 import { UseList_Heap } from "./free_list";
 
-type PrimitiveType = 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64' | 'f32' | 'f64';
+type PrimitiveType = 'u8' | 'i8' | 'u16' | 'i16' | 'u32' | 'i32' | 'u64' | 'i64' | 'f32' | 'f64' | 'bool';
 type StructType = PrimitiveType | `${PrimitiveType}[${number}]`;
 
 interface StructField {

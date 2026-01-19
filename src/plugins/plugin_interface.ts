@@ -16,4 +16,5 @@ export interface AudioOutputPlugin {
     enableEffect(e: EffectPlugin): void;
     disableEffect(e: EffectPlugin): void;
     removeEffect(e: EffectPlugin): void;
+    setParameter(p: string, v: any): void;
 }
