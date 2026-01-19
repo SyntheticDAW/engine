@@ -45,4 +45,8 @@ export class SinePlugin implements AudioOutputPlugin {
     disableEffect(e: EffectPlugin): void {
         
     }
+
+    setParameter(p: string, v: any): void {
+        
+    }
 }
