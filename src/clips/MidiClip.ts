@@ -2,7 +2,7 @@ import { UseList_Heap } from "../performance/allocators/free_list";
 import { LiveStruct, struct, StructDefinition } from "../performance/allocators/structs";
 
 export const NoteEvent = struct({
-    instance: 'u8',
+    instance: 'u32',
     pitch: 'u8',
     velocity: 'u8',
     setsOn: 'bool',
