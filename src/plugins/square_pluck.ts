@@ -73,6 +73,7 @@ const sqpo = {
     }
 
 }
+
 export class Square implements AudioOutputPlugin {
     wantsMic: boolean;
     pluginName: string;
@@ -87,7 +88,7 @@ export class Square implements AudioOutputPlugin {
     voiceLookup: Record<number, LiveStruct>;
     flatNotes: LiveStruct[];
     oscillators: OscillatorTemplate[];
-    dvlist: number[];
+    dv_lanes: Record<number, number>;
 
     constructor() {
         this.wantsMic = false;
@@ -101,7 +102,16 @@ export class Square implements AudioOutputPlugin {
         this.voiceLookup = {};
         this.flatNotes = [];
         this.oscillators = [sqpo];
-        this.dvlist = [];
+        this.dv_lanes = {};
+    }
+
+    note_processed(lane: number, inst: number): boolean {
+        if (typeof this.dv_lanes[lane] == "undefined") {
+            this.dv_lanes[lane] = 0
+            return false;
+        }
+
+        return inst <= this.dv_lanes[lane];
     }
 
     createObject(name: string, bytes: number): Uint8Array & { ptr: number } {
@@ -143,7 +153,7 @@ export class Square implements AudioOutputPlugin {
 
         for (let i = 0; i < this.flatNotes.length; i++) {
             if (startSample >= this.flatNotes[i].startTime) {
-                if (this.flatNotes[i].setsOn && !this.voiceLookup[this.flatNotes[i].instance] && !this.dvlist.includes(this.flatNotes[i].instance)) {
+                if (this.flatNotes[i].setsOn && !this.note_processed(this.flatNotes[i].lane, this.flatNotes[i].instance)) {
                     this.voiceLookup[this.flatNotes[i].instance] = this.object_allocator.new(Voice, {
                         pitch: this.flatNotes[i].pitch,
                         freq: 440 * 2 ** ((this.flatNotes[i].pitch - 69) / 12),
@@ -155,21 +165,24 @@ export class Square implements AudioOutputPlugin {
                         oscillatorPtr: 0,
                     })
                     console.log('made voice')
+                    this.dv_lanes[this.flatNotes[i].lane]++;
                 }
-                if (!this.flatNotes[i].setsOn && !this.dvlist.includes(this.flatNotes[i].instance)) {
-                    console.log('destroying voice')
-                    const inst = this.flatNotes[i].instance;
-                    const v = this.voiceLookup[this.flatNotes[i].instance];
-                    this.voiceLookup[this.flatNotes[i].instance].freq = 0;
-                    delete this.voiceLookup[this.flatNotes[i].instance];
-                    v.destroy()  // if using heap-allocated object
-                    this.dvlist.push(inst)
+                if (!this.flatNotes[i].setsOn && !this.note_processed(this.flatNotes[i].lane, this.flatNotes[i].instance)) {
+                    // console.log('destroying voice')
+                    // console.log('processed?', this.note_processed(this.flatNotes[i].lane, this.flatNotes[i].instance))
+
+                    const lane = this.flatNotes[i].lane;
+                    const v = this.voiceLookup[this.flatNotes[i].target];
+                    this.voiceLookup[this.flatNotes[i].target].freq = 0;
+                    if (v) v.destroy()  // if using heap-allocated object
+                    delete this.voiceLookup[this.flatNotes[i].target];
+                    this.dv_lanes[lane]++;
 
                 }
             }
         }
 
-        const len = h2.length;
+        // const len = h2.length;
         for (let i = 0; i < 128; i++) {
             arr[i] = 0; // clear buffer for mixing multiple voices
 

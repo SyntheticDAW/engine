@@ -6,15 +6,17 @@ export const NoteEvent = struct({
     pitch: 'u8',
     velocity: 'u8',
     setsOn: 'bool',
-    live: 'bool',
+    target: 'u32', //ued in noteoff events
+    lane: 'u8', //will bump to u16 eventually, controls whhich midi clip its in
     startTime: 'u32'
 });
+
+let  globalLane = 0;
 
 interface NoteEventInterface {
     pitch: number,
     velocity: number,
     setsOn?: number,
-    live?: number,
     startTime: number,
     active?: number,
     instance?: number;
@@ -26,6 +28,7 @@ export class MidiClip {
     sample_start: number;
     sample_end: number;
     ni: number;
+    lane: number;
 
     constructor() {
         this.notes = [];
@@ -33,6 +36,7 @@ export class MidiClip {
         this.sample_start = 0;
         this.sample_end = 0;
         this.ni = 0;
+        this.lane = ++globalLane;
     }
 
     setHeap(h: UseList_Heap) {
@@ -43,9 +47,9 @@ export class MidiClip {
         if (!this.heap) throw new Error("needs heap to allocate notes");
         const tn = this.heap.new(NoteEvent, {
             ...note,
+            lane: this.lane,
             instance: ++this.ni,
             setsOn: 1,
-            live: 1
         });
         let i = this.notes.length;
         while (i > 0 && this.notes[i - 1].startTime > tn.startTime) i--;
@@ -57,11 +61,12 @@ export class MidiClip {
         if (!this.heap) throw new Error("needs heap to allocate notes");
 
         const tn = this.heap.new(NoteEvent, {
-            instance: note.instance,
+            lane: this.lane,
+            target: note.instance,
+            instance: ++this.ni,
             pitch: note.pitch as number,
             velocity: note.velocity as number,
             setsOn: 0,
-            live: note.live as number,
             startTime: atSample
         });
 
