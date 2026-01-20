@@ -68,8 +68,13 @@ function toBigIntSafe(value: number | bigint, signed: boolean) {
     return BigInt(value);
 }
 
+function alignOffset(offset: number, alignment: number) {
+    return (offset + alignment - 1) & ~(alignment - 1);
+}
+
 export function struct(fields: Record<string, StructType>): StructDefinition {
     let offset = 0;
+    let maxAlign = 1;
     const layout: Record<string, StructField> = {};
     const fieldOrder: string[] = [];
 
@@ -84,21 +89,39 @@ export function struct(fields: Record<string, StructType>): StructDefinition {
             baseType = typeStr as PrimitiveType;
         }
 
-        const size = primitiveSize(baseType) * arrayLength;
-        if (primitiveSize(baseType) === 8) offset = (offset + 7) & ~7;
+        const elementSize = primitiveSize(baseType);
+        const size = elementSize * arrayLength;
+        maxAlign = Math.max(maxAlign, elementSize);
 
-        layout[name] = { type: typeStr, offset, size, arrayLength: arrayLength > 1 ? arrayLength : undefined };
+        // Align the start offset for the field
+        offset = alignOffset(offset, elementSize);
+
+        layout[name] = {
+            type: typeStr,
+            offset,
+            size,
+            arrayLength: arrayLength > 1 ? arrayLength : undefined
+        };
         fieldOrder.push(name);
-        offset += size;
+
+        // Increase offset, aligning each array element individually if 64-bit
+        if (arrayLength > 1 && elementSize >= 8) {
+            offset += arrayLength * alignOffset(elementSize, elementSize); // 64-bit alignment per element
+        } else {
+            offset += size;
+        }
     }
 
+    // Final struct size aligned to max field alignment
+    const structSize = alignOffset(offset, maxAlign);
+
     const structDef: StructDefinition = {
-        _size: offset,
+        _size: structSize,
         _fields: layout,
         fieldOrder,
 
         Make(heap: Heap, initial?: Record<string, number | bigint | Iterable<number | bigint>>, region?: Uint8Array & { ptr: number }): LiveStruct {
-            const reg = region ?? heap.malloc(structDef._size);
+            const reg = region ?? heap.malloc(structSize);
             const ptr = reg.ptr;
             let destroyed = false;
 
@@ -165,8 +188,8 @@ export function struct(fields: Record<string, StructType>): StructDefinition {
 
             return live;
         }
-
     };
 
     return structDef;
 }
+
