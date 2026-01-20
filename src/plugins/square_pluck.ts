@@ -11,7 +11,7 @@ import { AOPluginType, AudioOutputPlugin } from "./plugin_interface";
 
 interface OscillatorTemplate {
     wavetables: Float32Array[],
-    getSample(phase: number, freq: number): number;
+    getSample(phase: number, freq: number): { sample: number, new_phase: number };
 }
 
 const Voice = struct({
@@ -21,9 +21,58 @@ const Voice = struct({
     done: 'bool',
     instance: 'u32',
     oscillatorPtr: 'u16',  // index into oscillator table
-    modulatorsPtr: 'u16'   // index into modulator table
+    modulatorsPtr: 'u16',   // index into modulator table
+    freq: 'f32',
+    phase: 'f32',
 });
 
+interface _VoiceInterface {
+    pitch: number;
+    velocity: number;
+    startTime: number;
+    done: boolean;
+    instance: number;
+    oscillatorPtr: number;
+    modulatorsPtr: number;
+    freq: number;
+    phase: number;
+}
+
+
+const sqpo = {
+    wavetables: [
+        new Float32Array(2048).map((_, i, arr) => Math.sin((i / arr.length) * Math.PI * 2))
+    ],
+    getSample(phase: number, freq: number) {
+        const table = this.wavetables[0];
+        const len = table.length;
+        const index = phase * len;
+        const i1 = Math.floor(index);
+        const frac = index - i1;
+
+        // wrap indices safely
+        const i0 = (i1 - 1 + len) % len;
+        const i2 = i1;
+        const i3 = (i1 + 1) % len;
+        const i4 = (i1 + 2) % len;
+
+        // cubic Hermite interpolation
+        const y0 = table[i0], y1 = table[i2], y2 = table[i3], y3 = table[i4];
+        const c0 = y1;
+        const c1 = 0.5 * (y2 - y0);
+        const c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
+        const c3 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+
+        const sample = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
+        // advance phase externally
+        const newPhase = phase + freq / 44100;
+        const wrappedPhase = newPhase >= 1 ? newPhase - 1 : newPhase;
+
+        return { sample, new_phase: wrappedPhase };
+    }
+
+}
 export class Square implements AudioOutputPlugin {
     wantsMic: boolean;
     pluginName: string;
@@ -35,8 +84,9 @@ export class Square implements AudioOutputPlugin {
     object_allocator: UseList_Heap;
     objects: Record<string, Uint8Array & { ptr: number }>;
     midiClips: MidiClip[];
-    voiceLookup: Record<number,LiveStruct>;
+    voiceLookup: Record<number, LiveStruct>;
     flatNotes: LiveStruct[];
+    oscillators: OscillatorTemplate[];
 
     constructor() {
         this.wantsMic = false;
@@ -49,6 +99,7 @@ export class Square implements AudioOutputPlugin {
         this.midiClips = [];
         this.voiceLookup = {};
         this.flatNotes = [];
+        this.oscillators = [sqpo];
     }
 
     createObject(name: string, bytes: number): Uint8Array & { ptr: number } {
@@ -89,21 +140,39 @@ export class Square implements AudioOutputPlugin {
     _process128(arr: Float32Array, startSample: number): void {
         for (let i = 0; i < this.flatNotes.length; i++) {
             if (startSample >= this.flatNotes[i].startTime && !this.voiceLookup[this.flatNotes[i].instance]) {
-                console.log('activated voice')
-                this.voiceLookup[this.flatNotes[i].instance] = this.object_allocator.new(Voice, {
-                    pitch: this.flatNotes[i].pitch,
-                    velocity: this.flatNotes[i].velocity,
-                    startTime: this.flatNotes[i].startTime,
-                    done: 0, //false
-                    instance: this.flatNotes[i].instance,
-
-                })
+                if (this.flatNotes[i].setsOn) {
+                    this.voiceLookup[this.flatNotes[i].instance] = this.object_allocator.new(Voice, {
+                        pitch: this.flatNotes[i].pitch,
+                        freq: 440 * 2 ** ((this.flatNotes[i].pitch - 69) / 12),
+                        velocity: this.flatNotes[i].velocity,
+                        startTime: this.flatNotes[i].startTime,
+                        done: 0, //false
+                        instance: this.flatNotes[i].instance,
+                        phase: 0,
+                        oscillatorPtr: 0,
+                    })
+                    return;
+                } else {
+                    this.voiceLookup[this.flatNotes[i].instance].free();
+                    delete this.voiceLookup[this.flatNotes[i].instance];
+                }
             }
         }
-        
+
         const len = h2.length;
         for (let i = 0; i < 128; i++) {
-            arr[i] = h2[(startSample + i) % len];
+            arr[i] = 0; // clear buffer for mixing multiple voices
+
+            for (const [ii, _v] of Object.entries(this.voiceLookup)) {
+                const v = _v as any as _VoiceInterface;
+
+
+                const { sample, new_phase } = this.oscillators[v.oscillatorPtr].getSample(v.phase, v.freq);
+
+                arr[i] += sample * v.velocity; 
+
+                v.phase = new_phase;
+            }
         }
     }
 
