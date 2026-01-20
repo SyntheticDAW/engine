@@ -11,6 +11,7 @@ import { AOPluginType, AudioOutputPlugin } from "./plugin_interface";
 
 interface OscillatorTemplate {
     wavetables: Float32Array[],
+    getSample(phase: number, freq: number): number;
 }
 
 const Voice = struct({
@@ -87,7 +88,8 @@ export class Square implements AudioOutputPlugin {
      */
     _process128(arr: Float32Array, startSample: number): void {
         for (let i = 0; i < this.flatNotes.length; i++) {
-            if (startSample >= this.flatNotes[i].startTime) {
+            if (startSample >= this.flatNotes[i].startTime && !this.voiceLookup[this.flatNotes[i].instance]) {
+                console.log('activated voice')
                 this.voiceLookup[this.flatNotes[i].instance] = this.object_allocator.new(Voice, {
                     pitch: this.flatNotes[i].pitch,
                     velocity: this.flatNotes[i].velocity,

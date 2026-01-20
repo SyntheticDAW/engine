@@ -7,6 +7,7 @@ import { MidiClip } from "./clips/MidiClip";
 import { UseList_Heap } from "./performance/allocators/free_list";
 import { Plugin2H } from "./plugins/2h_plugin";
 import { SinePlugin } from "./plugins/sine_plugin";
+import { Square } from "./plugins/square_pluck";
 import { hann, hann_ready, loadHann, makeBlock } from "./wasm/hann_api";
 export { makeBlock, hann_ready, loadHann, hann } from "./wasm/hann_api";
 
@@ -26,7 +27,8 @@ export { sampleToSeconds } from "./util/seconds_from_sample";
 
 export const ExamplePlugins = {
     Sine: SinePlugin,
-    Plugin2H
+    Plugin2H,
+    Square
 }
 
 
