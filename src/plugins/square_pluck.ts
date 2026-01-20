@@ -76,8 +76,10 @@ interface _VoiceInterface {
 // Define the square oscillator with linear interpolation
 const sqpo = {
     wavetables: [
-        new Float32Array(2048).map((_, i, arr) => (i < arr.length / 2 ? 1 : -1))
+        new Float32Array(16).map((_, i, arr) => (i < arr.length / 2 ? 1 : -1))
     ],
+    lastSample: 0, // state for the one-pole filter
+
     getSample(phase: number, freq: number) {
         const table = this.wavetables[0];
         const len = table.length;
@@ -106,7 +108,14 @@ const sqpo = {
         const c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
         const c3 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
 
-        const sample = ((c3 * frac + c2) * frac + c1) * frac + c0;
+        const sampleRaw = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
+        // --- band-limit per pitch with a one-pole low-pass ---
+        const nyquist = 44100 / 2;
+        const cutoff = Math.min(freq * 20, nyquist); // simple heuristic: ~10 odd harmonics
+        const alpha = cutoff / nyquist; // 0..1
+        const sample = alpha * sampleRaw + (1 - alpha) * this.lastSample;
+        this.lastSample = sample;
 
         // convert back to normalized phase for next call
         const newPhase = tablePhase / len;
@@ -114,6 +123,7 @@ const sqpo = {
         return { sample, new_phase: newPhase };
     }
 };
+
 
 
 
@@ -194,62 +204,51 @@ export class Square implements AudioOutputPlugin {
      * Fill arr with 128 samples starting at the given absolute sample index
      */
     _process128(arr: Float32Array, startSample: number): void {
-
+        // --- Update voices from MIDI notes ---
         for (let i = 0; i < this.flatNotes.length; i++) {
-            if (startSample >= this.flatNotes[i].startTime) {
-                if (this.flatNotes[i].setsOn && !this.note_processed(this.flatNotes[i].lane, this.flatNotes[i].instance)) {
-                    this.voiceLookup[this.flatNotes[i].instance] = this.object_allocator.new(Voice, {
-                        pitch: this.flatNotes[i].pitch,
-                        freq: 440 * 2 ** ((this.flatNotes[i].pitch - 69) / 12),
-                        velocity: this.flatNotes[i].velocity,
-                        startTime: this.flatNotes[i].startTime,
-                        done: 0, //false
-                        instance: this.flatNotes[i].instance,
+            const note = this.flatNotes[i];
+            if (startSample >= note.startTime) {
+                if (note.setsOn && !this.note_processed(note.lane, note.instance)) {
+                    this.voiceLookup[note.instance] = this.object_allocator.new(Voice, {
+                        pitch: note.pitch,
+                        freq: 440 * 2 ** ((note.pitch - 69) / 12),
+                        velocity: note.velocity,
+                        startTime: note.startTime,
+                        done: 0,
+                        instance: note.instance,
                         phase: 0,
                         oscillatorPtr: 0,
-                    })
-                    console.log('made voice')
-                    this.dv_lanes[this.flatNotes[i].lane] = this.flatNotes[i].instance;
-                }
-                if (!this.flatNotes[i].setsOn) {
-                    // console.log('destroying voice')
-                    // console.log('processed?', this.note_processed(this.flatNotes[i].lane, this.flatNotes[i].instance))
-
-                    const v = this.voiceLookup[this.flatNotes[i].target];
+                    });
+                    this.dv_lanes[note.lane] = note.instance;
+                    console.log('made voice');
+                } else if (!note.setsOn) {
+                    const v = this.voiceLookup[note.target];
                     if (v) {
                         v.freq = 0;
                         v.destroy();
-                        delete this.voiceLookup[this.flatNotes[i].target];
+                        delete this.voiceLookup[note.target];
                     }
-                    // const lane = this.flatNotes[i].lane;
-
-                    // console.log('destroying voice, lane', lane, 'target instance', this.flatNotes[i].target, 'off instance', this.flatNotes[i].instance)
-                    // const v = this.voiceLookup[this.flatNotes[i].target];
-                    // this.voiceLookup[this.flatNotes[i].target].freq = 0;
-                    // if (v) v.destroy()  // if using heap-allocated object
-                    // delete this.voiceLookup[this.flatNotes[i].target];
-                    // this.dv_lanes[lane] = this.flatNotes[i].instance;
-
                 }
             }
         }
 
-        // const len = h2.length;
         for (let i = 0; i < 128; i++) {
-            arr[i] = 0; // clear buffer for mixing multiple voices
+            arr[i] = 0;
 
-            for (const [ii, _v] of Object.entries(this.voiceLookup)) {
+            for (const [_ii, _v] of Object.entries(this.voiceLookup)) {
                 const v = _v as any as _VoiceInterface;
 
-
+                // Call getSample exactly once per output sample
                 const { sample, new_phase } = this.oscillators[v.oscillatorPtr].getSample(v.phase, v.freq);
+                v.phase = new_phase;
 
                 arr[i] += (sample * v.velocity) / 127;
-
-                v.phase = new_phase;
             }
         }
+
+
     }
+
 
     process128(arr: Float32Array, startSample: number): void {
         this._process128(arr, startSample);
