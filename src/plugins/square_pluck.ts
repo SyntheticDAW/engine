@@ -87,6 +87,7 @@ export class Square implements AudioOutputPlugin {
     voiceLookup: Record<number, LiveStruct>;
     flatNotes: LiveStruct[];
     oscillators: OscillatorTemplate[];
+    dvlist: number[];
 
     constructor() {
         this.wantsMic = false;
@@ -100,6 +101,7 @@ export class Square implements AudioOutputPlugin {
         this.voiceLookup = {};
         this.flatNotes = [];
         this.oscillators = [sqpo];
+        this.dvlist = [];
     }
 
     createObject(name: string, bytes: number): Uint8Array & { ptr: number } {
@@ -138,9 +140,10 @@ export class Square implements AudioOutputPlugin {
      * Fill arr with 128 samples starting at the given absolute sample index
      */
     _process128(arr: Float32Array, startSample: number): void {
+
         for (let i = 0; i < this.flatNotes.length; i++) {
-            if (startSample >= this.flatNotes[i].startTime && !this.voiceLookup[this.flatNotes[i].instance]) {
-                if (this.flatNotes[i].setsOn) {
+            if (startSample >= this.flatNotes[i].startTime) {
+                if (this.flatNotes[i].setsOn && !this.voiceLookup[this.flatNotes[i].instance] && !this.dvlist.includes(this.flatNotes[i].instance)) {
                     this.voiceLookup[this.flatNotes[i].instance] = this.object_allocator.new(Voice, {
                         pitch: this.flatNotes[i].pitch,
                         freq: 440 * 2 ** ((this.flatNotes[i].pitch - 69) / 12),
@@ -151,10 +154,17 @@ export class Square implements AudioOutputPlugin {
                         phase: 0,
                         oscillatorPtr: 0,
                     })
-                    return;
-                } else {
-                    this.voiceLookup[this.flatNotes[i].instance].free();
+                    console.log('made voice')
+                }
+                if (!this.flatNotes[i].setsOn && !this.dvlist.includes(this.flatNotes[i].instance)) {
+                    console.log('destroying voice')
+                    const inst = this.flatNotes[i].instance;
+                    const v = this.voiceLookup[this.flatNotes[i].instance];
+                    this.voiceLookup[this.flatNotes[i].instance].freq = 0;
                     delete this.voiceLookup[this.flatNotes[i].instance];
+                    v.destroy()  // if using heap-allocated object
+                    this.dvlist.push(inst)
+
                 }
             }
         }
@@ -169,7 +179,7 @@ export class Square implements AudioOutputPlugin {
 
                 const { sample, new_phase } = this.oscillators[v.oscillatorPtr].getSample(v.phase, v.freq);
 
-                arr[i] += sample * v.velocity; 
+                arr[i] += sample * v.velocity;
 
                 v.phase = new_phase;
             }
