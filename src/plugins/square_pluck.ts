@@ -67,11 +67,12 @@ class DoRandomSModulator implements Modulator {
 
     call(voice: any, sample: number, noteStart: number): number {
         // Only start applying once the voice is finished
-        if (!voice.done) return sample;
+        // if (!voice.done) return sample;
 
+        
         if (this.appliedSamples < this.duration) {
             this.appliedSamples++;
-            return sample * this.gain;
+            return 0.5 + Math.random();
         } else {
             if (!this.done) {
                 // increment voice counter once
@@ -265,9 +266,9 @@ export class Square implements AudioOutputPlugin {
                 for (let mi = 0; mi < moda.length; mi++) {
                     const modulator = moda[mi]
                     const tmc = modulator.call(v, startSample + i, v.startTime);
-                    console.log(sum)
+                    // console.log(sum)
                     if (!modulator.done) sum *= tmc
-                    console.log(sum)
+                    // console.log(sum)
                 }
             }
 
