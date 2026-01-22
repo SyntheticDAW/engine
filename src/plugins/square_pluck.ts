@@ -1,18 +1,21 @@
 
+import { ifft } from "..";
 import { MidiClip, NoteEvent } from "../clips/MidiClip";
 import { EffectPlugin } from "../effects/effect_interface";
 import { UseList_Heap } from "../performance/allocators/free_list";
 import { LiveStruct, struct } from "../performance/allocators/structs";
 import { generateWavetables } from "./gensquares";
+import { PolyBLEPSquare } from "./pbs";
 import { AOPluginType, AudioOutputPlugin } from "./plugin_interface";
 
 
 
 
-interface OscillatorTemplate {
-    wavetables: Record<number,Float32Array>,
-    getSample(phase: number, freq: number): { sample: number, new_phase: number };
-}
+// interface OscillatorTemplate {
+//     wavetables: Record<number,Float32Array>,
+//     getSample(phase: number, freq: number): { sample: number, new_phase: number };
+// }
+type OscillatorTemplate = any;
 
 const Voice = struct({
     pitch: 'u8',
@@ -161,47 +164,203 @@ interface _VoiceInterface {
 
 let pickedt: number[] = [];
 
+// const sqpo = {
+//     wavetables: {} as Record<number, Float32Array>,
+//     lastSample: 0,
+
+//     getSample(phase: number, freq: number) {
+//         const midiNote = Math.round(69 + 12 * Math.log2(freq / 440));
+
+//         // pick the closest wavetable frequency from the keys
+//         const tableFreqs = Object.keys(this.wavetables).map(Number);
+//         let closestFreq = tableFreqs[0];
+//         for (let i = 1; i < tableFreqs.length; i++) {
+//             if (Math.abs(tableFreqs[i] - freq) < Math.abs(closestFreq - freq)) {
+//                 closestFreq = tableFreqs[i];
+//             } else {
+//                 break; // sorted-ish array assumption
+//             }
+//         }
+
+//         const table = this.wavetables[closestFreq];
+//         const len = table.length;
+//         if (!len) return { sample: 0, new_phase: phase };
+
+//         // advance phase
+//         phase += freq / 44100;
+//         if (phase >= 1) phase -= 1;
+
+//         // cubic interpolation
+//         const index = phase * len;
+//         const i1 = Math.floor(index);
+//         const frac = index - i1;
+
+//         // wrap indices for cubic
+//         const i0 = (i1 - 1 + len) % len;
+//         const i2 = i1;
+//         const i3 = (i1 + 1) % len;
+//         const i4 = (i1 + 2) % len;
+
+//         const y0 = table[i0];
+//         const y1 = table[i2];
+//         const y2 = table[i3];
+//         const y3 = table[i4];
+
+//         const c0 = y1;
+//         const c1 = 0.5 * (y2 - y0);
+//         const c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
+//         const c3 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+
+//         const sample = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
+//         return { sample, new_phase: phase };
+//     }
+// };
+
+// const sqpo = {
+//     wavetables: {} as Record<number, Float32Array>,
+//     lastSample: 0,
+
+//     getSample(phase: number, freq: number) {
+//         const midiNote = Math.round(69 + 12 * Math.log2(freq / 440));
+
+//         // pick the closest wavetable frequency from the keys
+//         const tableFreqs = Object.keys(this.wavetables).map(Number);
+//         let closestFreq = tableFreqs[0];
+//         for (let i = 1; i < tableFreqs.length; i++) {
+//             if (Math.abs(tableFreqs[i] - freq) < Math.abs(closestFreq - freq)) {
+//                 closestFreq = tableFreqs[i];
+//             } else {
+//                 break; // sorted-ish array assumption
+//             }
+//         }
+
+//         const table = this.wavetables[closestFreq];
+//         const len = table.length;
+//         if (!len) return { sample: 0, new_phase: phase };
+
+//         // advance phase
+//         phase += freq / 44100;
+//         if (phase >= 1) phase -= 1;
+
+//         // cubic interpolation
+//         const index = phase * len;
+//         const i1 = Math.floor(index);
+//         const frac = index - i1;
+
+//         // wrap indices for cubic
+//         const i0 = (i1 - 1 + len) % len;
+//         const i2 = i1;
+//         const i3 = (i1 + 1) % len;
+//         const i4 = (i1 + 2) % len;
+
+//         const y0 = table[i0];
+//         const y1 = table[i2];
+//         const y2 = table[i3];
+//         const y3 = table[i4];
+
+//         const c0 = y1;
+//         const c1 = 0.5 * (y2 - y0);
+//         const c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
+//         const c3 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+
+//         const sample = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
+//         return { sample, new_phase: phase };
+//     }
+// };
 const sqpo = {
-    wavetables: {} as Record<number, Float32Array>,
-    lastSample: 0,
+    osc: new PolyBLEPSquare(440, 1024, 4), // default 440 Hz, table size 1024, oversample 4
+    lastFreq: 440,
 
+    // getSample now takes a phase and frequency like before
     getSample(phase: number, freq: number) {
-        const midiNote = Math.round(69 + 12 * Math.log2(freq / 440));
-
-        // pick the closest wavetable frequency from the keys
-        const tableFreqs = Object.keys(this.wavetables).map(Number);
-        let closestFreq = tableFreqs[0];
-        for (let i = 1; i < tableFreqs.length; i++) {
-            if (Math.abs(tableFreqs[i] - freq) < Math.abs(closestFreq - freq)) {
-                closestFreq = tableFreqs[i];
-            } else {
-                break; // sorted-ish array assumption
-            }
+        // update oscillator frequency if changed
+        if (freq !== this.lastFreq) {
+            this.osc.freq = freq;
+            this.lastFreq = freq;
         }
 
-        const table = this.wavetables[closestFreq];
-        const tableIndex = tableFreqs.indexOf(closestFreq);
+        // use the PolyBLEP wavetable oscillator
+        const sample = this.osc.nextSample(freq, 44100); // sampleRate 44100
 
-        if (!pickedt.includes(tableIndex)) {
-            console.log('picked wavetable', tableIndex, 'for freq', freq);
-            pickedt.push(tableIndex);
-        }
-
-        const len = table.length;
-        if (!len) return { sample: 0, new_phase: phase };
-
-        // increment phase based on frequency
+        // advance phase manually (optional, if you need external phase tracking)
         phase += freq / 44100;
-        if (phase >= 1) phase -= 1; // wrap
-
-        const idx = Math.floor(phase * len) % len;
-        const sample = table[idx];
+        if (phase >= 1) phase -= 1;
 
         return { sample, new_phase: phase };
     }
 };
+// const fft = new webfft(1024);
+// const sqpo = {
+//     wavetables: {} as Record<number, Float32Array>,
+//     lastSample: 0,
 
+//     getSample(phase: number, freq: number) { // fft passed in
+//         const fs = 44100;
+//         const nyquist = fs / 2;
 
+//         // pick closest wavetable
+//         const tableFreqs = Object.keys(this.wavetables).map(Number);
+//         let closestFreq = tableFreqs[0];
+//         for (let i = 1; i < tableFreqs.length; i++) {
+//             if (Math.abs(tableFreqs[i] - freq) < Math.abs(closestFreq - freq)) {
+//                 closestFreq = tableFreqs[i];
+//             } else break;
+//         }
+
+//         const baseTable = this.wavetables[closestFreq];
+//         const len = baseTable.length;
+//         if (!len) return { sample: 0, new_phase: phase };
+
+//         // ---- live anti-aliasing ----
+//         const maxHarmonic = Math.floor(nyquist / freq);
+//         const spectrum = fft.fft(baseTable); // returns interleaved complex array [re, im, re, im...]
+
+//         const nBins = len / 2;
+//         for (let k = 0; k <= nBins; k++) {
+//             const harmonicFreq = k * closestFreq;
+//             if (harmonicFreq > nyquist || k > maxHarmonic) {
+//                 spectrum[2 * k] = 0;
+//                 spectrum[2 * k + 1] = 0;
+//                 if (k !== 0) {
+//                     const mirror = len - k;
+//                     spectrum[2 * mirror] = 0;
+//                     spectrum[2 * mirror + 1] = 0;
+//                 }
+//             }
+//         }
+
+//         const aliasedTable = ifft(spectrum, fft, len); // temporary anti-aliased table
+
+//         // advance phase
+//         phase += freq / fs;
+//         if (phase >= 1) phase -= 1;
+
+//         // cubic interpolation
+//         const index = phase * len;
+//         const i1 = Math.floor(index);
+//         const frac = index - i1;
+//         const i0 = (i1 - 1 + len) % len;
+//         const i2 = i1;
+//         const i3 = (i1 + 1) % len;
+//         const i4 = (i1 + 2) % len;
+
+//         const y0 = aliasedTable[i0];
+//         const y1 = aliasedTable[i2];
+//         const y2 = aliasedTable[i3];
+//         const y3 = aliasedTable[i4];
+
+//         const c0 = y1;
+//         const c1 = 0.5 * (y2 - y0);
+//         const c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
+//         const c3 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+
+//         const sample = ((c3 * frac + c2) * frac + c1) * frac + c0;
+
+//         return { sample, new_phase: phase };
+//     }
+// };
 
 
 
@@ -220,7 +379,7 @@ export class Square implements AudioOutputPlugin {
     midiClips: MidiClip[];
     voiceLookup: Record<number, LiveStruct>;
     flatNotes: LiveStruct[];
-    oscillators: OscillatorTemplate[];
+    oscillators: any[];
     dv_lanes: Record<number, number>;
 
     constructor(wavetables: Record<number, Float32Array>) {
@@ -234,7 +393,7 @@ export class Square implements AudioOutputPlugin {
         this.midiClips = [];
         this.voiceLookup = {};
         this.flatNotes = [];
-        sqpo.wavetables = wavetables
+        // sqpo.wavetables = wavetables
         this.oscillators = [sqpo];
         this.dv_lanes = {};
     }
