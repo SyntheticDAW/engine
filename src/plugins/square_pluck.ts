@@ -53,36 +53,96 @@ interface Modulator {
     [key: string]: any;
 }
 
-class DoRandomSModulator implements Modulator {
-    done = false;
-    gain: number;
-    duration: number;      // how long to apply after note ends, in samples
-    appliedSamples: number;
+// class DoRandomSModulator implements Modulator {
+//     done = false;
+//     gain: number;
+//     duration: number;      // how long to apply after note ends, in samples
+//     appliedSamples: number;
 
-    constructor(durationS: number = 1, sampleRate: number = 44100) {
-        this.duration = durationS * sampleRate;
-        this.appliedSamples = 0;
-        this.gain = 0.5 + Math.random(); // random gain 0.5–1.5
-    }
+//     constructor(durationS: number = 1, sampleRate: number = 44100) {
+//         this.duration = durationS * sampleRate;
+//         this.appliedSamples = 0;
+//         this.gain = 0.5 + Math.random(); // random gain 0.5–1.5
+//     }
 
-    call(voice: any, sample: number, noteStart: number): number {
-        // Only start applying once the voice is finished
-        // if (!voice.done) return sample;
+//     call(voice: any, sample: number, noteStart: number): number {
+//         // Only start applying once the voice is finished
+//         // if (!voice.done) return sample;
 
         
-        if (this.appliedSamples < this.duration) {
-            this.appliedSamples++;
-            return 0.5 + Math.random();
-        } else {
-            if (!this.done) {
-                // increment voice counter once
-                voice.done_modulators = (voice.done_modulators || 0) + 1;
-                this.done = true;
+//         if (this.appliedSamples < this.duration) {
+//             this.appliedSamples++;
+//             return 0.5 + Math.random();
+//         } else {
+//             if (!this.done) {
+//                 // increment voice counter once
+//                 voice.done_modulators = (voice.done_modulators || 0) + 1;
+//                 this.done = true;
+//             }
+//             return sample;
+//         }
+//     }
+// }
+
+class DoRandomSModulator implements Modulator {
+    done = false;
+
+    // hard-coded ADSR (samples @ 44.1kHz)
+    attack  = 200;    // ~4.5ms
+    decay   = 2000;   // ~45ms
+    sustain = 0.6;
+    release = 3000;   // ~68ms
+
+    // internal state (owned by modulator)
+    releaseStartSample = -1;
+
+    call(voice: any, sample: number, noteStart: number): number {
+        const age = sample - noteStart;
+
+        // -------------------------
+        // NOTE ON (A/D/S)
+        // -------------------------
+        if (!voice.done) {
+            // attack
+            if (age < this.attack) {
+                return age / this.attack;
             }
-            return sample;
+
+            // decay
+            if (age < this.attack + this.decay) {
+                const t = (age - this.attack) / this.decay;
+                return 1 - t * (1 - this.sustain);
+            }
+
+            // sustain
+            return this.sustain;
         }
+
+        // -------------------------
+        // RELEASE
+        // -------------------------
+        if (this.releaseStartSample === -1) {
+            this.releaseStartSample = sample;
+        }
+
+        const rAge = sample - this.releaseStartSample;
+
+        if (rAge < this.release) {
+            return this.sustain * (1 - rAge / this.release);
+        }
+
+        // -------------------------
+        // FINISHED
+        // -------------------------
+        if (!this.done) {
+            this.done = true;
+            voice.done_modulators++;
+        }
+
+        return 0;
     }
 }
+
 
 
 function createPluckADSR(attackS: number, decayS: number, sustain: number, releaseS: number) {
