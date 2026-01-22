@@ -1,12 +1,12 @@
 import webfft from "webfft";
-import { loadHann } from "../wasm/hann_api";
-import { Hann, ifft } from "..";
+import { ifft } from "..";
 
-const fs = 44100;        // sample rate
-const N = 1024;           // FFT size
-const numTables = 11;     // number of wavetables
+const fs = 44100;       // sample rate
 const nyquist = fs / 2;
 
+/**
+ * Normalize a Float32Array in-place to [-1, 1]
+ */
 function normalize(arr: Float32Array) {
     let max = 0;
     for (let i = 0; i < arr.length; i++) max = Math.max(max, Math.abs(arr[i]));
@@ -15,48 +15,42 @@ function normalize(arr: Float32Array) {
     return arr;
 }
 
-export function generateWavetables(): Promise<Float32Array[]> {
-    return new Promise(async (resolve) => {
-        await loadHann();
-        const fi = new webfft(N);
-        let wavetables: Float32Array[] = [];
+/**
+ * Generate anti-aliased square wave wavetables
+ * @param resolution Number of wavetables to generate across the harmonic range
+ * @param baseFreq Fundamental frequency for table generation (default A4=440Hz)
+ */
+export async function generateWavetables(resolution: number, fMin = 20, fMax = 20000): Promise<Record<number, Float32Array>> {
+    const N = 1024;
+    const fi = new webfft(N);
+    const wavetables: Record<number, Float32Array> = {};
 
-        const block = Hann.makeBlock(N);
-        Hann.hann(block as any);
+    for (let t = 0; t < resolution; t++) {
+        // logarithmic spacing of frequencies
+        const f0 = fMin * Math.pow(fMax / fMin, t / (resolution - 1));
 
-        for (let t = 0; t < numTables; t++) {
-            const maxOddHarmonic = Math.max(1, 11 - t);
-            let fftBins = new Float32Array(2 * N); // zeros
+        let fftBins = new Float32Array(2 * N);
 
-            for (let k = 1; k <= maxOddHarmonic; k++) {
-                const harmonic = 2 * k - 1;
-                const freq = harmonic * 440;
-                if (freq > nyquist) break;
+        // compute max harmonic that doesn't exceed Nyquist
+        const maxHarmonic = Math.floor(nyquist / f0);
+        for (let k = 1; k <= maxHarmonic; k += 2) { // only odd harmonics
+            const freq = k * f0;
+            const bin = Math.round(freq / fs * N);
+            const magnitude = 1 / k;
 
-                const bin = Math.round(freq / fs * N);
-                const magnitude = 1 / harmonic;
+            fftBins[2 * bin] = magnitude;
+            fftBins[2 * bin + 1] = 0;
 
-                fftBins[2 * bin] = magnitude;
-                fftBins[2 * bin + 1] = 0;
-
-                if (bin !== 0) {
-                    fftBins[2 * (N - bin)] = magnitude;
-                    fftBins[2 * (N - bin) + 1] = 0;
-                }
+            if (bin !== 0) {
+                fftBins[2 * (N - bin)] = magnitude;
+                fftBins[2 * (N - bin) + 1] = 0;
             }
-
-            let wavetable = ifft(fftBins, fi, N);
-
-            // Apply Hann window
-            for (let i = 0; i < N; i++) wavetable[i] *= block[i];
-
-            normalize(wavetable);
-
-            wavetables.push(wavetable);
         }
 
-        Hann.freeBlock(block as any);
+        const wavetable = ifft(fftBins, fi, N);
+        normalize(wavetable);
+        wavetables[f0] = wavetable;
+    }
 
-        resolve(wavetables); // resolve once all tables are ready
-    });
+    return wavetables;
 }
