@@ -86,6 +86,69 @@ interface Modulator {
 //         }
 //     }
 // }
+class PluckADSRModulator implements Modulator {
+    done = false;
+
+    // ADSR (samples at 44.1 kHz)
+    attack = 13230;   // 0.3s
+    decay = 22050;    // 0.5s
+    sustain = 0.01;  // almost silent for pluck effect
+    release = 22050;  // 0.5s
+
+    // internal state
+    releaseStartSample = -1;
+    releaseStartMultiplier = 0;
+
+    call(voice: any, sample: number, noteStart: number): { multiplier?: number } {
+        const age = sample - noteStart;
+        let mult = 0;
+
+        // -------------------------
+        // NOTE ON (A/D/S)
+        // -------------------------
+        if (!voice.done) {
+            if (age < this.attack) {
+                // Attack phase
+                mult = age / this.attack;
+            } else if (age < this.attack + this.decay) {
+                // Decay phase
+                const t = (age - this.attack) / this.decay;
+                mult = 1 - t * (1 - this.sustain);
+            } else {
+                // Sustain phase
+                mult = this.sustain;
+            }
+            return { multiplier: mult };
+        }
+
+        // -------------------------
+        // RELEASE — only after note is done
+        // -------------------------
+        if (this.releaseStartSample === -1) {
+            this.releaseStartSample = sample;
+            this.releaseStartMultiplier = mult || this.sustain; 
+        }
+
+        const rAge = sample - this.releaseStartSample;
+
+        if (rAge < this.release) {
+            mult = this.releaseStartMultiplier * (1 - rAge / this.release);
+            return { multiplier: mult };
+        }
+
+        // -------------------------
+        // FINISHED — increment done_modulators once
+        // -------------------------
+        if (!this.done) {
+            this.done = true;
+            voice.done_modulators++;
+        }
+
+        return { multiplier: 0 };
+    }
+}
+
+
 
 class DetuneModulator implements Modulator {
     done = false;
@@ -174,36 +237,36 @@ class DetuneModulator implements Modulator {
 
 
 
-function createPluckADSR(attackS: number, decayS: number, sustain: number, releaseS: number) {
-    return function (ageSamples: number, noteReleased = false, releaseStart = 0) {
-        if (!noteReleased) {
-            // Attack phase — make it almost instantaneous
-            if (ageSamples < attackS) return 1.0; // jump to full immediately
+// function createPluckADSR(attackS: number, decayS: number, sustain: number, releaseS: number) {
+//     return function (ageSamples: number, noteReleased = false, releaseStart = 0) {
+//         if (!noteReleased) {
+//             // Attack phase — make it almost instantaneous
+//             if (ageSamples < attackS) return 1.0; // jump to full immediately
 
-            // Decay phase — drop quickly to a low sustain (pluck)
-            else if (ageSamples < attackS + decayS) {
-                const t = (ageSamples - attackS) / decayS;
-                return 1.0 * (1 - t) + sustain * t; // linear decay
-            }
+//             // Decay phase — drop quickly to a low sustain (pluck)
+//             else if (ageSamples < attackS + decayS) {
+//                 const t = (ageSamples - attackS) / decayS;
+//                 return 1.0 * (1 - t) + sustain * t; // linear decay
+//             }
 
-            // Pluck sustain — very short, can even be zero
-            else return sustain;
-        } else {
-            // Release phase — quick drop
-            const releasePos = ageSamples - releaseStart;
-            return Math.max(0, sustain * (1 - releasePos / releaseS));
-        }
-    };
-}
+//             // Pluck sustain — very short, can even be zero
+//             else return sustain;
+//         } else {
+//             // Release phase — quick drop
+//             const releasePos = ageSamples - releaseStart;
+//             return Math.max(0, sustain * (1 - releasePos / releaseS));
+//         }
+//     };
+// }
 
-// Example usage for a percussive square pluck
-const sampleRate = 44100;
-const attackS = 1;        // 1 sample = instantaneous
-const decayS = 1000;      // ~23ms decay
-const sustain = 0.0;      // drop to zero immediately for pluck
-const releaseS = 2000;    // ~45ms release
+// // Example usage for a percussive square pluck
+// const sampleRate = 44100;
+// const attackS = 1;        // 1 sample = instantaneous
+// const decayS = 1000;      // ~23ms decay
+// const sustain = 0.0;      // drop to zero immediately for pluck
+// const releaseS = 2000;    // ~45ms release
 
-const pluckADSR = createPluckADSR(attackS, decayS, sustain, releaseS);
+// const pluckADSR = createPluckADSR(attackS, decayS, sustain, releaseS);
 
 
 export class Square implements AudioOutputPlugin {
@@ -237,7 +300,7 @@ export class Square implements AudioOutputPlugin {
         // sqpo.wavetables = wavetables
         this.oscillators = [sqpo];
         this.dv_lanes = {};
-        this.modulators = { '0': [new DetuneModulator()] };
+        this.modulators = { '0': [new PluckADSRModulator(), new DetuneModulator()] };
     }
 
     note_processed(lane: number, inst: number): boolean {
