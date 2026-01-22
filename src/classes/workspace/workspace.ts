@@ -1,4 +1,4 @@
-import { sumBlocksMutate } from "../../mutations/sum_mutate";
+import { sumBlocksMutate, sumBlocksMutateTan } from "../../mutations/sum_mutate";
 import { createSampleSAB, createSampleView, WorkletHelper } from "../../processor/create_processor";
 import { Track } from "./track";
 
@@ -42,7 +42,7 @@ export class Workspace {
 
             const start = b2f * 128;
 
-            sumBlocksMutate(
+            sumBlocksMutateTan(
                 bufs,
                 0,
                 128,

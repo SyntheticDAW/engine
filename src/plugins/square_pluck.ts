@@ -95,6 +95,7 @@ class DoRandomSModulator implements Modulator {
 
     // internal state (owned by modulator)
     releaseStartSample = -1;
+    releaseStartValue = 0; // amplitude at release start
 
     call(voice: any, sample: number, noteStart: number): number {
         const age = sample - noteStart;
@@ -123,12 +124,14 @@ class DoRandomSModulator implements Modulator {
         // -------------------------
         if (this.releaseStartSample === -1) {
             this.releaseStartSample = sample;
+            this.releaseStartValue = Math.min(this.sustain, 1); // capture current amplitude
         }
 
         const rAge = sample - this.releaseStartSample;
 
         if (rAge < this.release) {
-            return this.sustain * (1 - rAge / this.release);
+            // linear fade from releaseStartValue down to 0
+            return this.releaseStartValue * (1 - rAge / this.release);
         }
 
         // -------------------------
