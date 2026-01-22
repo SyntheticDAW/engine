@@ -28,8 +28,8 @@ const Voice = struct({
     modulatorsPtr: 'u16',
     freq: 'f32',
     phase: 'f32',
-
-    lpf_z1: 'f32',     
+    done_modulators: 'u32',
+    lpf_z1: 'f32',
 });
 
 
@@ -45,18 +45,47 @@ interface _VoiceInterface {
     phase: number;
     lpf_z1: number;
     done_modulators: number;
-    modulators: Modulator[];
 }
 
 interface Modulator {
     done: boolean;
-    voiceId: number;
+    call(voice: any, sample: number, noteStart: number): number;
     [key: string]: any;
+}
+
+class DoRandomSModulator implements Modulator {
+    done = false;
+    gain: number;
+    duration: number;      // how long to apply after note ends, in samples
+    appliedSamples: number;
+
+    constructor(durationS: number = 1, sampleRate: number = 44100) {
+        this.duration = durationS * sampleRate;
+        this.appliedSamples = 0;
+        this.gain = 0.5 + Math.random(); // random gain 0.5–1.5
+    }
+
+    call(voice: any, sample: number, noteStart: number): number {
+        // Only start applying once the voice is finished
+        if (!voice.done) return sample;
+
+        if (this.appliedSamples < this.duration) {
+            this.appliedSamples++;
+            return sample * this.gain;
+        } else {
+            if (!this.done) {
+                // increment voice counter once
+                voice.done_modulators = (voice.done_modulators || 0) + 1;
+                this.done = true;
+            }
+            return sample;
+        }
+    }
 }
 
 
 function createPluckADSR(attackS: number, decayS: number, sustain: number, releaseS: number) {
-    return function(ageSamples: number, noteReleased = false, releaseStart = 0) {
+    return function (ageSamples: number, noteReleased = false, releaseStart = 0) {
         if (!noteReleased) {
             // Attack phase — make it almost instantaneous
             if (ageSamples < attackS) return 1.0; // jump to full immediately
@@ -102,6 +131,7 @@ export class Square implements AudioOutputPlugin {
     flatNotes: LiveStruct[];
     oscillators: any[];
     dv_lanes: Record<number, number>;
+    modulators: Record<number, Modulator[]>;
 
     constructor(wavetables: Record<number, Float32Array>) {
         this.wantsMic = false;
@@ -117,6 +147,7 @@ export class Square implements AudioOutputPlugin {
         // sqpo.wavetables = wavetables
         this.oscillators = [sqpo];
         this.dv_lanes = {};
+        this.modulators = { '0': [new DoRandomSModulator()] };
     }
 
     note_processed(lane: number, inst: number): boolean {
@@ -182,13 +213,39 @@ export class Square implements AudioOutputPlugin {
                     this.dv_lanes[note.lane] = note.instance;
                     console.log('made voice');
                 } else if (!note.setsOn) {
-                    const v = this.voiceLookup[note.target];
-                    if (v) {
-                        v.freq = 0;
-                        v.destroy();
-                        delete this.voiceLookup[note.target];
-                    }
+                    const v = this.voiceLookup[note.target] ?? undefined;
+                    // if (v) {
+                    //     v.freq = 0;
+                    //     v.destroy();
+                    //     delete this.voiceLookup[note.target];
+                    // }
+
+
+                    if (v) v.done = true;
+
                 }
+
+                const v = this.voiceLookup[note.target] ?? undefined;
+                if (v && !v.destroyed && v.done && v.done_modulators >= this.modulators[v.modulatorsPtr].length) {
+                    v.freq = 0;
+                    v.destroy();
+                    delete this.voiceLookup[note.target];
+                }
+
+                // const v = this.voiceLookup[note.target];
+
+                // if (!note.setsOn && !v) {
+                //     console.warn("Voice not found for note.target:", note.target, note);
+                //     continue; // skip
+                // }
+
+                // // Check all expected fields
+                // if (typeof v.done === "undefined") console.warn("v.done is undefined", v);
+                // if (typeof v.done_modulators === "undefined") console.warn("v.done_modulators is undefined", v);
+                // if (typeof this.modulators[v.modulatorsPtr] === "undefined") {
+                //     console.warn("Modulators missing for modulatorsPtr", v.modulatorsPtr, v);
+                // }
+
             }
         }
 
@@ -203,7 +260,15 @@ export class Square implements AudioOutputPlugin {
 
                 v.phase = new_phase;
 
-                sum += ((sample * v.velocity) / 127) * pluckADSR((startSample+i - v.startTime));
+                sum += ((sample * v.velocity) / 127)
+                const moda = this.modulators[v.modulatorsPtr] ?? [];
+                for (let mi = 0; mi < moda.length; mi++) {
+                    const modulator = moda[mi]
+                    const tmc = modulator.call(v, startSample + i, v.startTime);
+                    console.log(sum)
+                    if (!modulator.done) sum *= tmc
+                    console.log(sum)
+                }
             }
 
             arr[i] = sum; // <<--- write the mixed sample to the output buffer
