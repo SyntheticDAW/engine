@@ -3,9 +3,10 @@ export { Track } from "./classes/workspace/track";
 export { Workspace } from "./classes/workspace/workspace";
 export { sumBlocksMutate } from "./mutations/sum_mutate";
 export { WasmSummer } from "./mutations/wasm_summer";
+import webfft from "webfft";
 import { MidiClip } from "./clips/MidiClip";
 import { UseList_Heap } from "./performance/allocators/free_list";
-import { Plugin2H } from "./plugins/2h_plugin";
+import { h22, Plugin2H } from "./plugins/2h_plugin";
 import { SinePlugin } from "./plugins/sine_plugin";
 import { Square } from "./plugins/square_pluck";
 import { hann, hann_ready, loadHann, makeBlock } from "./wasm/hann_api";
@@ -49,3 +50,23 @@ export const Hann = {
 export const ClipSources = {
     MidiClip
 }
+export const fft = webfft;
+export const ifft = function ifft(outComplex: Float32Array, fft: any, N: number) {
+    const len = outComplex.length;
+    const conjInput = new Float32Array(len);
+
+    for (let i = 0; i < len; i++) {
+        if (i % 2 === 0) conjInput[i] = outComplex[i];
+    }
+
+    const fftConj = fft.fft(conjInput);
+
+    const realSignal = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        realSignal[i] = fftConj[2 * i] / N;
+    }
+
+    return realSignal;
+};
+
+export const h2 = h22;

@@ -12,5 +12,8 @@
   "description": "A typescript synthesizer.",
   "devDependencies": {
     "esbuild": "^0.27.2"
+  },
+  "dependencies": {
+    "webfft": "^1.0.3"
   }
 }

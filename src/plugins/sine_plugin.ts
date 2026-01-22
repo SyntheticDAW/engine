@@ -1,4 +1,5 @@
 import { EffectPlugin } from "../effects/effect_interface";
+import { h22 } from "./2h_plugin";
 import { AOPluginType, AudioOutputPlugin } from "./plugin_interface";
 
 export class SinePlugin implements AudioOutputPlugin {
@@ -19,15 +20,25 @@ export class SinePlugin implements AudioOutputPlugin {
     /**
      * Fill arr with 128 samples starting at the given absolute sample index
      */
-    process128(arr: Float32Array, startSample: number): void {
-        // console.log('startSample', startSample)
-        const sampleRate = 44100;
-        const phaseIncrement = (2 * Math.PI * this.freq) / sampleRate;
+    // process128(arr: Float32Array, startSample: number): void {
+    //     // console.log('startSample', startSample)
+    //     const sampleRate = 44100;
+    //     const phaseIncrement = (2 * Math.PI * this.freq) / sampleRate;
+
+    //     for (let i = 0; i < arr.length; i++) {
+    //         // calculate absolute phase from global sample index
+    //         const phase = (startSample + i) * phaseIncrement;
+    //         arr[i] = Math.sin(phase) * this.amp;
+    //     }
+    // }
+
+        process128(arr: Float32Array, startSample: number): void {
+        // const sampleRate = 44100;
+        // const phaseIncrement = (2 * Math.PI * this.freq) / sampleRate;
 
         for (let i = 0; i < arr.length; i++) {
-            // calculate absolute phase from global sample index
-            const phase = (startSample + i) * phaseIncrement;
-            arr[i] = Math.sin(phase) * this.amp;
+    
+            arr[i] = h22[i % 1024];
         }
     }
     addEffect(e: EffectPlugin): void {
