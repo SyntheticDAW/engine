@@ -347,6 +347,34 @@ let pickedt: number[] = [];
 
 
 
+
+function createADSR(attackS: number, decayS: number, sustain: number, releaseS: number) {
+    return function(ageSamples: number, noteReleased = false, releaseStart = 0) {
+        if (!noteReleased) {
+            // Attack phase
+            if (ageSamples < attackS) return ageSamples / attackS;
+            // Decay phase
+            else if (ageSamples < attackS + decayS) return 1 - (1 - sustain) * ((ageSamples - attackS) / decayS);
+            // Sustain
+            else return sustain;
+        } else {
+            // Release phase
+            const releasePos = ageSamples - releaseStart;
+            return Math.max(0, sustain * (1 - releasePos / releaseS));
+        }
+    };
+}
+
+
+const sampleRate = 44100;
+const attackS = 0.05 * sampleRate;   // 50ms
+const decayS = 0.1 * sampleRate;     // 100ms
+const sustain = 0.8;
+const releaseS = 0.2 * sampleRate;   // 200ms
+
+const myADSR = createADSR(attackS, decayS, sustain, releaseS);
+
+
 export class Square implements AudioOutputPlugin {
     wantsMic: boolean;
     pluginName: string;
@@ -463,7 +491,7 @@ export class Square implements AudioOutputPlugin {
 
                 v.phase = new_phase;
 
-                sum += (sample * v.velocity) / 127;
+                sum += ((sample * v.velocity) / 127) * myADSR((startSample+i - v.startTime));
             }
 
             arr[i] = sum; // <<--- write the mixed sample to the output buffer
