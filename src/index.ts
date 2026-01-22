@@ -10,6 +10,7 @@ import { h22, Plugin2H } from "./plugins/2h_plugin";
 import { SinePlugin } from "./plugins/sine_plugin";
 import { Square } from "./plugins/square_pluck";
 import { hann, hann_ready, loadHann, makeBlock } from "./wasm/hann_api";
+export { generateWavetables } from "./plugins/gensquares";
 export { makeBlock, hann_ready, loadHann, hann } from "./wasm/hann_api";
 
 export { createSampleSAB, createSampleView, createWorkletBlob, WorkletHelper } from "./processor/create_processor";
@@ -70,3 +71,4 @@ export const ifft = function ifft(outComplex: Float32Array, fft: any, N: number)
 };
 
 export const h2 = h22;
+
