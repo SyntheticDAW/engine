@@ -5,6 +5,7 @@ import { EffectPlugin } from "../effects/effect_interface";
 import { UseList_Heap } from "../performance/allocators/free_list";
 import { LiveStruct, struct } from "../performance/allocators/structs";
 import { generateWavetables } from "./gensquares";
+import { sqpo } from "./osc/sqp";
 import { PolyBLEPSquare } from "./pbs";
 import { AOPluginType, AudioOutputPlugin } from "./plugin_interface";
 
@@ -269,28 +270,8 @@ let pickedt: number[] = [];
 //         return { sample, new_phase: phase };
 //     }
 // };
-const sqpo = {
-    osc: new PolyBLEPSquare(440, 1024, 4), // default 440 Hz, table size 1024, oversample 4
-    lastFreq: 440,
 
-    // getSample now takes a phase and frequency like before
-    getSample(phase: number, freq: number) {
-        // update oscillator frequency if changed
-        if (freq !== this.lastFreq) {
-            this.osc.freq = freq;
-            this.lastFreq = freq;
-        }
 
-        // use the PolyBLEP wavetable oscillator
-        const sample = this.osc.nextSample(freq, 44100); // sampleRate 44100
-
-        // advance phase manually (optional, if you need external phase tracking)
-        phase += freq / 44100;
-        if (phase >= 1) phase -= 1;
-
-        return { sample, new_phase: phase };
-    }
-};
 // const fft = new webfft(1024);
 // const sqpo = {
 //     wavetables: {} as Record<number, Float32Array>,
