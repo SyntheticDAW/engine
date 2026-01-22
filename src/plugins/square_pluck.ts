@@ -49,7 +49,10 @@ interface _VoiceInterface {
 
 interface Modulator {
     done: boolean;
-    call(voice: any, sample: number, noteStart: number): number;
+    call(voice: any, sampleIndex: number, noteStart: number): {
+        multiplier?: number; // for amplitude effects
+        freqOffset?: number; // for pitch/detune effects
+    };
     [key: string]: any;
 }
 
@@ -69,7 +72,7 @@ interface Modulator {
 //         // Only start applying once the voice is finished
 //         // if (!voice.done) return sample;
 
-        
+
 //         if (this.appliedSamples < this.duration) {
 //             this.appliedSamples++;
 //             return 0.5 + Math.random();
@@ -84,67 +87,90 @@ interface Modulator {
 //     }
 // }
 
-class DoRandomSModulator implements Modulator {
+class DetuneModulator implements Modulator {
     done = false;
 
-    // hard-coded ADSR (samples @ 44.1kHz)
-    attack  = 200;    // ~4.5ms
-    decay   = 2000;   // ~45ms
-    sustain = 0.6;
-    release = 3000;   // ~68ms
+    freq = 5;      // LFO frequency in Hz
+    depth = 0.3;   // detune amount in semitones (~30 cents)
+    sampleRate = 44100;
+    phase = 0;
 
-    // internal state (owned by modulator)
-    releaseStartSample = -1;
-    releaseStartValue = 0; // amplitude at release start
+    call(voice: any, sample: number, noteStart: number): { freqOffset?: number } {
+        // Increment LFO phase
+        const increment = (2 * Math.PI * this.freq) / this.sampleRate;
+        this.phase += increment;
+        if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
 
-    call(voice: any, sample: number, noteStart: number): number {
-        const age = sample - noteStart;
+        // Sine LFO for smooth detune
+        const detuneAmount = Math.sin(this.phase) * this.depth;
 
-        // -------------------------
-        // NOTE ON (A/D/S)
-        // -------------------------
-        if (!voice.done) {
-            // attack
-            if (age < this.attack) {
-                return age / this.attack;
-            }
-
-            // decay
-            if (age < this.attack + this.decay) {
-                const t = (age - this.attack) / this.decay;
-                return 1 - t * (1 - this.sustain);
-            }
-
-            // sustain
-            return this.sustain;
-        }
-
-        // -------------------------
-        // RELEASE
-        // -------------------------
-        if (this.releaseStartSample === -1) {
-            this.releaseStartSample = sample;
-            this.releaseStartValue = Math.min(this.sustain, 1); // capture current amplitude
-        }
-
-        const rAge = sample - this.releaseStartSample;
-
-        if (rAge < this.release) {
-            // linear fade from releaseStartValue down to 0
-            return this.releaseStartValue * (1 - rAge / this.release);
-        }
-
-        // -------------------------
-        // FINISHED
-        // -------------------------
-        if (!this.done) {
-            this.done = true;
-            voice.done_modulators++;
-        }
-
-        return 0;
+        // Return as a frequency offset in semitones
+        return { freqOffset: detuneAmount };
     }
 }
+
+
+// class DoRandomSModulator implements Modulator {
+//     done = false;
+
+//     // hard-coded ADSR (samples @ 44.1kHz)
+//     attack  = 200;    // ~4.5ms
+//     decay   = 2000;   // ~45ms
+//     sustain = 0.6;
+//     release = 3000;   // ~68ms
+
+//     // internal state (owned by modulator)
+//     releaseStartSample = -1;
+//     releaseStartValue = 0; // amplitude at release start
+
+//     call(voice: any, sample: number, noteStart: number): number {
+//         const age = sample - noteStart;
+
+//         // -------------------------
+//         // NOTE ON (A/D/S)
+//         // -------------------------
+//         if (!voice.done) {
+//             // attack
+//             if (age < this.attack) {
+//                 return age / this.attack;
+//             }
+
+//             // decay
+//             if (age < this.attack + this.decay) {
+//                 const t = (age - this.attack) / this.decay;
+//                 return 1 - t * (1 - this.sustain);
+//             }
+
+//             // sustain
+//             return this.sustain;
+//         }
+
+//         // -------------------------
+//         // RELEASE
+//         // -------------------------
+//         if (this.releaseStartSample === -1) {
+//             this.releaseStartSample = sample;
+//             this.releaseStartValue = Math.min(this.sustain, 1); // capture current amplitude
+//         }
+
+//         const rAge = sample - this.releaseStartSample;
+
+//         if (rAge < this.release) {
+//             // linear fade from releaseStartValue down to 0
+//             return this.releaseStartValue * (1 - rAge / this.release);
+//         }
+
+//         // -------------------------
+//         // FINISHED
+//         // -------------------------
+//         if (!this.done) {
+//             this.done = true;
+//             voice.done_modulators++;
+//         }
+
+//         return 0;
+//     }
+// }
 
 
 
@@ -211,7 +237,7 @@ export class Square implements AudioOutputPlugin {
         // sqpo.wavetables = wavetables
         this.oscillators = [sqpo];
         this.dv_lanes = {};
-        this.modulators = { '0': [new DoRandomSModulator()] };
+        this.modulators = { '0': [new DetuneModulator()] };
     }
 
     note_processed(lane: number, inst: number): boolean {
@@ -319,24 +345,31 @@ export class Square implements AudioOutputPlugin {
             for (const _v of Object.values(this.voiceLookup)) {
                 const v = _v as any as _VoiceInterface;
 
-                const { sample, new_phase } =
-                    this.oscillators[v.oscillatorPtr].getSample(v.phase, v.freq);
+                // start with base frequency and amplitude
+                let freq = v.freq;
+                let amp = 1;
 
-                v.phase = new_phase;
-
-                sum += ((sample * v.velocity) / 127)
+                // apply all modulators
                 const moda = this.modulators[v.modulatorsPtr] ?? [];
                 for (let mi = 0; mi < moda.length; mi++) {
-                    const modulator = moda[mi]
-                    const tmc = modulator.call(v, startSample + i, v.startTime);
-                    // console.log(sum)
-                    if (!modulator.done) sum *= tmc
-                    // console.log(sum)
+                    const mod = moda[mi];
+                    const res = mod.call(v, startSample + i, v.startTime);
+
+                    if (res.multiplier !== undefined) amp *= res.multiplier;
+                    if (res.freqOffset !== undefined) freq *= 2 ** (res.freqOffset / 12);
                 }
+
+                // get oscillator sample
+                const { sample, new_phase } = this.oscillators[v.oscillatorPtr].getSample(v.phase, freq);
+                v.phase = new_phase;
+
+                // add to the sum with velocity and amplitude applied
+                sum += (sample * v.velocity / 127) * amp;
             }
 
-            arr[i] = sum; // <<--- write the mixed sample to the output buffer
+            arr[i] = sum; // write the mixed sample to output
         }
+
 
 
     }
