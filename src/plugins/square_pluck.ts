@@ -165,37 +165,58 @@ const sqpo = {
     wavetables: {} as Record<number, Float32Array>,
     lastSample: 0,
 
+    // Cubic interpolation helper
+    cubicInterpolate(y0: number, y1: number, y2: number, y3: number, t: number) {
+        const a = (-0.5*y0 + 1.5*y1 - 1.5*y2 + 0.5*y3);
+        const b = (y0 - 2.5*y1 + 2*y2 - 0.5*y3);
+        const c = (-0.5*y0 + 0.5*y2);
+        const d = y1;
+        return ((a*t + b)*t + c)*t + d;
+    },
+
     getSample(phase: number, freq: number) {
-        const midiNote = Math.round(69 + 12 * Math.log2(freq / 440));
-
-        // pick the closest wavetable frequency from the keys
-        const tableFreqs = Object.keys(this.wavetables).map(Number);
-        let closestFreq = tableFreqs[0];
-        for (let i = 1; i < tableFreqs.length; i++) {
-            if (Math.abs(tableFreqs[i] - freq) < Math.abs(closestFreq - freq)) {
-                closestFreq = tableFreqs[i];
-            } else {
-                break; // sorted-ish array assumption
-            }
+        const tableFreqs = Object.keys(this.wavetables).map(Number).sort((a,b)=>a-b);
+        
+        // Find two closest wavetables for freq blending
+        let loFreq = tableFreqs[0], hiFreq = tableFreqs[tableFreqs.length-1];
+        for (let i = 0; i < tableFreqs.length; i++) {
+            if (tableFreqs[i] <= freq) loFreq = tableFreqs[i];
+            if (tableFreqs[i] >= freq) { hiFreq = tableFreqs[i]; break; }
         }
 
-        const table = this.wavetables[closestFreq];
-        const tableIndex = tableFreqs.indexOf(closestFreq);
+        const tBlend = (freq - loFreq) / (hiFreq - loFreq || 1);
+        const tableLo = this.wavetables[loFreq];
+        const tableHi = this.wavetables[hiFreq];
+        const len = tableLo.length;
 
-        if (!pickedt.includes(tableIndex)) {
-            console.log('picked wavetable', tableIndex, 'for freq', freq);
-            pickedt.push(tableIndex);
-        }
-
-        const len = table.length;
-        if (!len) return { sample: 0, new_phase: phase };
-
-        // increment phase based on frequency
+        // increment phase
         phase += freq / 44100;
-        if (phase >= 1) phase -= 1; // wrap
+        if (phase >= 1) phase -= 1;
 
-        const idx = Math.floor(phase * len) % len;
-        const sample = table[idx];
+        const floatIdx = phase * len;
+        const idx = Math.floor(floatIdx);
+        const frac = floatIdx - idx;
+
+        // wrap indices for cubic interp
+        const getWrapped = (arr: Float32Array, i: number) => arr[(i + len) % len];
+
+        const sLo = this.cubicInterpolate(
+            getWrapped(tableLo, idx-1),
+            getWrapped(tableLo, idx),
+            getWrapped(tableLo, idx+1),
+            getWrapped(tableLo, idx+2),
+            frac
+        );
+
+        const sHi = this.cubicInterpolate(
+            getWrapped(tableHi, idx-1),
+            getWrapped(tableHi, idx),
+            getWrapped(tableHi, idx+1),
+            getWrapped(tableHi, idx+2),
+            frac
+        );
+
+        const sample = sLo * (1 - tBlend) + sHi * tBlend;
 
         return { sample, new_phase: phase };
     }
