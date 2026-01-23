@@ -1,6 +1,7 @@
 import { PolyBLEPSquare } from "../pbs";
 
 export const sqpo = {
+    id: 0,
     table: new PolyBLEPSquare(440, 2048, 4).table, // just the table
     tableSize: 2048,
 
