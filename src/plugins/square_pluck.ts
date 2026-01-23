@@ -86,16 +86,14 @@ interface Modulator {
 //         }
 //     }
 // }
-class PluckADSRModulator implements Modulator {
+class CustomPluckADSR implements Modulator {
     done = false;
 
-    // ADSR (samples at 44.1 kHz)
-    attack = 13230;   // 0.3s
-    decay = 22050;    // 0.5s
-    sustain = 0.01;  // almost silent for pluck effect
-    release = 22050;  // 0.5s
+    attack = 0.3 * 44100;      // 0.3s
+    decay = 0.2 * 44100;       // 0.2s
+    sustain = 0.0;               // target level after decay
+    release = 0.08 * 44100;     // 0.2s
 
-    // internal state
     releaseStartSample = -1;
     releaseStartMultiplier = 0;
 
@@ -104,40 +102,45 @@ class PluckADSRModulator implements Modulator {
         let mult = 0;
 
         // -------------------------
-        // NOTE ON (A/D/S)
+        // NOTE ON (Attack/Decay/Sustain)
         // -------------------------
         if (!voice.done) {
             if (age < this.attack) {
-                // Attack phase
+                // linear or whatever you already had
                 mult = age / this.attack;
             } else if (age < this.attack + this.decay) {
-                // Decay phase
                 const t = (age - this.attack) / this.decay;
-                mult = 1 - t * (1 - this.sustain);
+                mult = this.sustain + (1 - this.sustain) * (1 - t); // linear decay
             } else {
-                // Sustain phase
-                mult = this.sustain;
+                if (this.sustain === 0) {
+                    // special case: go straight to release
+                    voice.done = true;
+                    mult = 0;
+                } else {
+                    mult = this.sustain;
+                }
             }
             return { multiplier: mult };
         }
 
         // -------------------------
-        // RELEASE — only after note is done
+        // RELEASE (exponential)
         // -------------------------
         if (this.releaseStartSample === -1) {
             this.releaseStartSample = sample;
-            this.releaseStartMultiplier = mult || this.sustain; 
+            this.releaseStartMultiplier = Math.max(mult, 0.001); // start from current amplitude
         }
 
         const rAge = sample - this.releaseStartSample;
-
         if (rAge < this.release) {
-            mult = this.releaseStartMultiplier * (1 - rAge / this.release);
+            const t = rAge / this.release;
+            // exponential fade: starts at releaseStartMultiplier, decays quickly then slows
+            mult = this.releaseStartMultiplier * Math.pow(0.01, t);
             return { multiplier: mult };
         }
 
         // -------------------------
-        // FINISHED — increment done_modulators once
+        // FINISHED
         // -------------------------
         if (!this.done) {
             this.done = true;
@@ -146,31 +149,31 @@ class PluckADSRModulator implements Modulator {
 
         return { multiplier: 0 };
     }
+
 }
 
 
+// class DetuneModulator implements Modulator {
+//     done = false;
 
-class DetuneModulator implements Modulator {
-    done = false;
+//     freq = 5;      // LFO frequency in Hz
+//     depth = 0.3;   // detune amount in semitones (~30 cents)
+//     sampleRate = 44100;
+//     phase = 0;
 
-    freq = 5;      // LFO frequency in Hz
-    depth = 0.3;   // detune amount in semitones (~30 cents)
-    sampleRate = 44100;
-    phase = 0;
+//     call(voice: any, sample: number, noteStart: number): { freqOffset?: number } {
+//         // Increment LFO phase
+//         const increment = (2 * Math.PI * this.freq) / this.sampleRate;
+//         this.phase += increment;
+//         if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
 
-    call(voice: any, sample: number, noteStart: number): { freqOffset?: number } {
-        // Increment LFO phase
-        const increment = (2 * Math.PI * this.freq) / this.sampleRate;
-        this.phase += increment;
-        if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
+//         // Sine LFO for smooth detune
+//         const detuneAmount = Math.sin(this.phase) * this.depth;
 
-        // Sine LFO for smooth detune
-        const detuneAmount = Math.sin(this.phase) * this.depth;
-
-        // Return as a frequency offset in semitones
-        return { freqOffset: detuneAmount };
-    }
-}
+//         // Return as a frequency offset in semitones
+//         return { freqOffset: detuneAmount };
+//     }
+// }
 
 
 // class DoRandomSModulator implements Modulator {
@@ -300,7 +303,7 @@ export class Square implements AudioOutputPlugin {
         // sqpo.wavetables = wavetables
         this.oscillators = [sqpo];
         this.dv_lanes = {};
-        this.modulators = { '0': [new PluckADSRModulator(), new DetuneModulator()] };
+        this.modulators = { '0': [new CustomPluckADSR(), /*new DetuneModulator()*/] };
     }
 
     note_processed(lane: number, inst: number): boolean {
