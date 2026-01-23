@@ -238,10 +238,15 @@ export class Square implements AudioOutputPlugin {
     /**
      * Fill arr with 128 samples starting at the given absolute sample index
      */
+    private debugCounter = 0; // add this to your class
+
     _process128(arr: Float32Array, startSample: number): void {
+        const debugInterval = 44100; // print roughly every 1 second at 44.1kHz
+
         // --- Update voices from MIDI notes ---
         for (let i = 0; i < this.flatNotes.length; i++) {
             const note = this.flatNotes[i];
+
             if (startSample >= note.startTime) {
                 if (note.setsOn && !this.note_processed(note.lane, note.instance)) {
                     this.voiceLookup[note.instance] = this.object_allocator.new(Voice, {
@@ -256,41 +261,22 @@ export class Square implements AudioOutputPlugin {
                         oscPhases: new Float32Array(64),
                     });
                     this.dv_lanes[note.lane] = note.instance;
-                    console.log('made voice');
-                } else if (!note.setsOn) {
+                    console.log(`[Sample ${startSample}] MADE VOICE: instance=${note.instance} pitch=${note.pitch}`);
+                } else if (!note.setsOn && !this.note_processed(note.lane, note.instance)) {
                     const v = this.voiceLookup[note.target] ?? undefined;
-                    // if (v) {
-                    //     v.freq = 0;
-                    //     v.destroy();
-                    //     delete this.voiceLookup[note.target];
-                    // }
-
-
-                    if (v) v.done = true;
-
+                    if (v) {
+                        v.done = true;
+                        console.log(`[Sample ${startSample}] NOTE OFF: instance=${note.target} pitch=${note.pitch}`);
+                    }
                 }
 
                 const v = this.voiceLookup[note.target] ?? undefined;
                 if (v && !v.destroyed && v.done && v.done_modulators >= this.modulators[v.modulatorsPtr].length) {
+                    console.log(`[Sample ${startSample}] DESTROYING VOICE: instance=${note.target}`);
                     v.freq = 0;
                     v.destroy();
                     delete this.voiceLookup[note.target];
                 }
-
-                // const v = this.voiceLookup[note.target];
-
-                // if (!note.setsOn && !v) {
-                //     console.warn("Voice not found for note.target:", note.target, note);
-                //     continue; // skip
-                // }
-
-                // // Check all expected fields
-                // if (typeof v.done === "undefined") console.warn("v.done is undefined", v);
-                // if (typeof v.done_modulators === "undefined") console.warn("v.done_modulators is undefined", v);
-                // if (typeof this.modulators[v.modulatorsPtr] === "undefined") {
-                //     console.warn("Modulators missing for modulatorsPtr", v.modulatorsPtr, v);
-                // }
-
             }
         }
 
@@ -300,7 +286,6 @@ export class Square implements AudioOutputPlugin {
             for (const _v of Object.values(this.voiceLookup)) {
                 const v = _v as any as _VoiceInterface;
 
-                // get the oscillators for this voice
                 const oscillator_indices = this.oscillator_lookup[v.oscillatorsPtr] || [];
                 let voiceSum = 0;
 
@@ -308,44 +293,46 @@ export class Square implements AudioOutputPlugin {
                     const oscIdx = oscillator_indices[oi];
                     const osc = this.oscillators[oscIdx];
 
-                    // get the phase for this oscillator from the voice's array
                     let phase = v.oscPhases[oi] ?? 0;
 
-                    // get modulators for this oscillator
                     const modIndices = this.modulator_lookup[osc.id] || [];
                     const mods = modIndices.map(mi => this.modulators[mi]);
 
                     let freq = v.freq;
                     let amp = 1;
 
-                    // apply oscillator modulators
                     for (const mod of mods) {
                         const { multiplier, freqOffset } = mod.call(v, startSample + i, (startSample + i) - v.startTime);
                         if (multiplier !== undefined) amp *= multiplier;
+                        if (amp == 0) {
+                            console.log('amp is 0')
+                        }
                         if (freqOffset !== undefined) freq *= 2 ** (freqOffset / 12);
                     }
 
-                    // get oscillator sample using phase
-                    const { sample, new_phase } = osc.getSample(phase, freq);
 
-                    // save updated phase back to voice
+
+                    const { sample, new_phase } = osc.getSample(phase, freq);
                     v.oscPhases[oi] = new_phase;
 
                     voiceSum += sample * amp;
                 }
 
-                // apply velocity
                 sum += (voiceSum * v.velocity / 127);
+
+
+                // sparse debug: print only every debugInterval samples
+                // if ((this.debugCounter + i) % debugInterval*200 === 0) {
+                //     console.log(`[Sample ${startSample + i}] Voice ${v.instance} voiceSum=${voiceSum.toFixed(3)} sum=${sum.toFixed(3)} done=${v.done}`);
+                // }
             }
 
-            arr[i] = sum; // write mixed sample
+            arr[i] = sum;
         }
 
-
-
-
-
+        this.debugCounter += 128;
     }
+
 
 
 
