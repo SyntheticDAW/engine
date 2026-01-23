@@ -127,6 +127,29 @@ class CustomPluckADSR implements Modulator {
 
 }
 
+
+class DetuneModulator implements Modulator {
+    done = false;
+
+    freq = 5;      // LFO frequency in Hz
+    depth = 0.3;   // detune amount in semitones (~30 cents)
+    sampleRate = 44100;
+    phase = 0;
+
+    call(voice: any, sample: number, noteStart: number): { freqOffset?: number } {
+        // Increment LFO phase
+        const increment = (2 * Math.PI * this.freq) / this.sampleRate;
+        this.phase += increment;
+        if (this.phase > 2 * Math.PI) this.phase -= 2 * Math.PI;
+
+        // Sine LFO for smooth detune
+        const detuneAmount = Math.sin(this.phase) * this.depth;
+
+        // Return as a frequency offset in semitones
+        return { freqOffset: detuneAmount };
+    }
+}
+
 export class Square implements AudioOutputPlugin {
     wantsMic: boolean;
     pluginName: string;
@@ -164,8 +187,8 @@ export class Square implements AudioOutputPlugin {
         this.oscillators = [sqpo];
         this.oscillator_lookup = { '0': [0] }
         this.dv_lanes = {};
-        this.modulators = [new CustomPluckADSR()]
-        this.modulator_lookup = { '0': [0, /*new DetuneModulator()*/] };
+        this.modulators = [new CustomPluckADSR(), new DetuneModulator()]
+        this.modulator_lookup = { '0': [0, 1] };
         this.osc_phases = new Float32Array(256);
     }
 
