@@ -272,6 +272,10 @@ class CustomPluckADSR implements Modulator {
 // const pluckADSR = createPluckADSR(attackS, decayS, sustain, releaseS);
 
 
+interface OscillatorInterface {
+    [key: string]: any;
+    appliedModulators: number[];
+}
 export class Square implements AudioOutputPlugin {
     wantsMic: boolean;
     pluginName: string;
@@ -285,9 +289,10 @@ export class Square implements AudioOutputPlugin {
     midiClips: MidiClip[];
     voiceLookup: Record<number, LiveStruct>;
     flatNotes: LiveStruct[];
-    oscillators: any[];
+    oscillators: OscillatorInterface[];
     dv_lanes: Record<number, number>;
-    modulators: Record<number, Modulator[]>;
+    modulators: Modulator[];
+    modulator_lookup: Record<number, number[]>;
 
     constructor(wavetables: Record<number, Float32Array>) {
         this.wantsMic = false;
@@ -303,7 +308,8 @@ export class Square implements AudioOutputPlugin {
         // sqpo.wavetables = wavetables
         this.oscillators = [sqpo];
         this.dv_lanes = {};
-        this.modulators = { '0': [new CustomPluckADSR(), /*new DetuneModulator()*/] };
+        this.modulators = [new CustomPluckADSR()]
+        this.modulator_lookup = { '0': [0, /*new DetuneModulator()*/] };
     }
 
     note_processed(lane: number, inst: number): boolean {
@@ -358,7 +364,7 @@ export class Square implements AudioOutputPlugin {
                 if (note.setsOn && !this.note_processed(note.lane, note.instance)) {
                     this.voiceLookup[note.instance] = this.object_allocator.new(Voice, {
                         pitch: note.pitch,
-                        freq: 430 * 2 ** ((note.pitch - 69) / 12),
+                        freq: 440 * 2 ** ((note.pitch - 69) / 12),
                         velocity: note.velocity,
                         startTime: note.startTime,
                         done: 0,
