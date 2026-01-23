@@ -34,6 +34,7 @@ const Voice = struct({
     phase: 'f32',
     done_modulators: 'u32',
     lpf_z1: 'f32',
+    oscPhases: 'f32[64]'
 });
 
 
@@ -49,6 +50,7 @@ interface _VoiceInterface {
     phase: number;
     lpf_z1: number;
     done_modulators: number;
+    oscPhases: Float32Array;
 }
 
 interface Modulator {
@@ -251,6 +253,7 @@ export class Square implements AudioOutputPlugin {
                         instance: note.instance,
                         phase: 0,
                         oscillatorsPtr: 0,
+                        oscPhases: new Float32Array(64),
                     });
                     this.dv_lanes[note.lane] = note.instance;
                     console.log('made voice');
@@ -305,9 +308,8 @@ export class Square implements AudioOutputPlugin {
                     const oscIdx = oscillator_indices[oi];
                     const osc = this.oscillators[oscIdx];
 
-                    // get or initialize the phase for this oscillator
-                    if (this.osc_phases[osc.id] === undefined) this.osc_phases[osc.id] = 0;
-                    let phase = this.osc_phases[osc.id];
+                    // get the phase for this oscillator from the voice's array
+                    let phase = v.oscPhases[oi] ?? 0;
 
                     // get modulators for this oscillator
                     const modIndices = this.modulator_lookup[osc.id] || [];
@@ -320,12 +322,14 @@ export class Square implements AudioOutputPlugin {
                     for (const mod of mods) {
                         const { multiplier, freqOffset } = mod.call(v, startSample + i, (startSample + i) - v.startTime);
                         if (multiplier !== undefined) amp *= multiplier;
-                        if (freqOffset !== undefined) freq *= 240 ** (freqOffset / 12);
+                        if (freqOffset !== undefined) freq *= 2 ** (freqOffset / 12);
                     }
 
-                    // get oscillator sample using central phase
+                    // get oscillator sample using phase
                     const { sample, new_phase } = osc.getSample(phase, freq);
-                    this.osc_phases[osc.id] = new_phase; // save updated phase
+
+                    // save updated phase back to voice
+                    v.oscPhases[oi] = new_phase;
 
                     voiceSum += sample * amp;
                 }
@@ -336,6 +340,7 @@ export class Square implements AudioOutputPlugin {
 
             arr[i] = sum; // write mixed sample
         }
+
 
 
 
