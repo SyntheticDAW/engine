@@ -320,7 +320,7 @@ export class Square implements AudioOutputPlugin {
                     for (const mod of mods) {
                         const { multiplier, freqOffset } = mod.call(v, startSample + i, (startSample + i) - v.startTime);
                         if (multiplier !== undefined) amp *= multiplier;
-                        if (freqOffset !== undefined) freq *= 2 ** (freqOffset / 12);
+                        if (freqOffset !== undefined) freq *= 240 ** (freqOffset / 12);
                     }
 
                     // get oscillator sample using central phase
