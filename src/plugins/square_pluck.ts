@@ -358,7 +358,7 @@ export class Square implements AudioOutputPlugin {
                 if (note.setsOn && !this.note_processed(note.lane, note.instance)) {
                     this.voiceLookup[note.instance] = this.object_allocator.new(Voice, {
                         pitch: note.pitch,
-                        freq: 440 * 2 ** ((note.pitch - 69) / 12),
+                        freq: 430 * 2 ** ((note.pitch - 69) / 12),
                         velocity: note.velocity,
                         startTime: note.startTime,
                         done: 0,
